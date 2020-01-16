@@ -8,8 +8,11 @@ dir_path = os.path.dirname(real_path)
 
 from distutils.core import setup
 from Cython.Build import cythonize
+from disrutils.extension import Extension
 
-gis_core_modules = cythonize("./cython/zilliz_gis_core.pyx", compiler_directives = {'language_level': 3})
+#gis_core_modules = cythonize("./cython/zilliz_gis_core.pyx", compiler_directives = {'language_level': 3})
+gis_core_modules = cythonize(Extension(name="zilliz_gis", sources=["./cython/zilliz_gis_core.pyx"],
+                                       compiler_directives = {'language_level': 3}))
 
 for ext in gis_core_modules:
     # The Numpy C headers are currently required
@@ -26,7 +29,7 @@ for ext in gis_core_modules:
     ext.define_macros.append(("_GLIBCXX_USE_CXX11_ABI", "0"))
 
 setup(
-    name = "zilliz_gis",
-    ext_modules=cythonize(gis_core_modules),
+    # name = "zilliz_gis",
+    ext_modules=cythonize(gis_core_modules)
 )
 

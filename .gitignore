@@ -5,3 +5,4 @@ build/
 .vscode/
 core/cmake-build-debug/
 python/cython/*.cpp
+spark/pyspark/cython/*.cpp
