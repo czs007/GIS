@@ -1,4 +1,4 @@
-project(zillizgis LANGUAGES CXX)
+project(arctern LANGUAGES CXX)
 
 option(USE_GPU off)
 option(BUILD_UNITTEST off)
@@ -42,11 +42,18 @@ set(LIB_VERSION "0.1.0")
 
 set(CMAKE_CXX_STANDARD 14)
 if (USE_GPU)
+    set(PYARROW_WITH_CUDA 1)
     message(STATUS "Building on GPU")
-    project(zillizgis LANGUAGES CUDA CXX)
+    enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 14)
     add_compile_definitions(USE_GPU)
     set(CPU_OR_GPU "GPU")
+    message("importing ${CMAKE_CUDA_IMPLICIT_INCLUDE_DIRECTORIES}")
+    message("importing ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}")
+    include_directories(${CMAKE_CUDA_IMPLICIT_INCLUDE_DIRECTORIES})
+    link_directories(${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -Xcompiler -fPIC -D_FORCE_INLINES")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
 else()
     set(CPU_OR_GPU "CPU")
     message(STATUS "Building on CPU")
@@ -95,9 +102,6 @@ endif ()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall -Wno-unused-variable -Wno-sign-compare -Werror")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-if (USE_GPU)
-    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -Xcompiler -fPIC -std=c++11 -D_FORCE_INLINES -arch sm_60 --expt-extended-lambda")
-endif ()
 
 if( CMAKE_BUILD_TYPE STREQUAL "Release" )
     message(STATUS "Building Release version")
@@ -114,32 +118,20 @@ message(STATUS "CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 set(LIB_GIS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(LIB_GIS_SRC_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-if (USE_GPU)
-    set(cuda_inc /usr/local/cuda/include)
-    if (DEFINED APPLE)
-        set(cuda_lib /usr/local/cuda/lib)
-    elseif (DEFINED UNIX)
-        set(cuda_lib /usr/local/cuda/lib64)
-    endif ()
-endif ()
-
-
 include_directories(${LIB_GIS_INCLUDE})
 include_directories(${LIB_GIS_SRC_INCLUDE})
 include_directories(${PROJECT_BINARY_DIR})
 message(STATUS "PROJECT_BINARY_DIR = ${PROJECT_BINARY_DIR}")
 
-if (USE_GPU)
-    include_directories(${cuda_inc})
-    link_directories(${cuda_lib})
-endif ()
 
-message(STATUS "conda_prefix = " $ENV{CONDA_PREFIX})
+
+set(CONDA_PREFIX "$ENV{CONDA_PREFIX}")
+message(STATUS "conda_prefix = " ${CONDA_PREFIX})
 
 include_directories(${CMAKE_BINARY_DIR}/thirdparty/include)
-include_directories($ENV{CONDA_PREFIX}/include)
+include_directories(${CONDA_PREFIX}/include)
 link_directories(${CMAKE_BINARY_DIR}/thirdparty/lib)
-link_directories($ENV{CONDA_PREFIX}/lib)
+link_directories(${CONDA_PREFIX}/lib)
 
 add_subdirectory(src)
 
@@ -252,9 +244,7 @@ install(
     FILES_MATCHING PATTERN "lib*"
 )
 
-set(GIS_LIB_DIR ${CMAKE_INSTALL_PREFIX}/lib)
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/gis_env.sh.template ${CMAKE_BINARY_DIR}/scripts/gis_env.sh @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/arctern_env.sh.template ${CMAKE_BINARY_DIR}/scripts/arctern_env.sh @ONLY)
 
 install(DIRECTORY ${CMAKE_BINARY_DIR}/scripts/
         DESTINATION scripts
