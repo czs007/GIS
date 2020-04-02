@@ -28,9 +28,14 @@ class Spark(db.DB):
 
         import uuid
         self._db_id = str(uuid.uuid1()).replace('-', '')
+        self._db_id = "1"
         self._db_name = db_config['db_name']
         self._db_type = 'spark'
         self._table_list = []
+        self._tables_meta = []
+        self._tables_name = []
+        self._tables_index = {}
+        self._tables_parents = []
 
         print("init spark begin")
         import socket
@@ -111,6 +116,61 @@ class Spark(db.DB):
 
             if meta.get('visibility') == 'True':
                 self._table_list.append('global_temp.' + meta.get('name'))
+        self._tables_meta = metas
+        self._process_tables_meta()
+
+    def _process_tables_meta(self):
+        for i, table in enumerate(self._tables_meta):
+            table_name = table['name']
+            self._tables_name.append(table_name)
+            self._tables_index[table_name] = i
+
+        for table in self._tables_meta:
+            table_name = table['name']
+            parents = table.get("parents", [])
+            parent_indexs = set()
+            for parent in parents:
+                parent_indexs.add(self._tables_index[parent])
+            self._tables_parents.append(parent_indexs)
+
+        changed = list(range(0, len(self._tables_parents)))
+        while (changed):
+            new_changed = []
+            for change in changed:
+                parents = self._tables_parents[change]
+                if parents:
+                    new_parents = set()
+                    for parent in parents:
+                        new_parents |= self._tables_parents[parent]
+                    if not new_parents.issubset(parents):
+                        new_changed.append(change)
+                        self._tables_parents[change] = new_parents | parents
+            changed = new_changed
+
+
+    def get_reload_tables(self, table_names):
+        indexs = []
+        for name in table_names:
+            if name not in self._tables_index:
+                return []
+            indexs.append(self._tables_index[name])
+
+        def _get_children_for_one(index):
+            ret = set()
+            for i, parents in enumerate(self._tables_parents):
+                if index in parents:
+                    ret.add(i)
+            return ret
+
+        ret = set()
+        for index in indexs:
+            ret |= _get_children_for_one(index)
+
+        ret |= set(indexs)
+        ret = list(ret)
+        ret.sort()
+        ret = [self._tables_name[index] for index in ret]
+        return ret
 
     def get_table_info(self, table_name):
         return self.run_for_json("desc table {}".format(table_name))

@@ -27,7 +27,53 @@ API = Blueprint('app_api', __name__)
 
 DB_MAP = {}
 
+def unload_data(content):
+    if not utils.check_json(content, 'db_name') \
+        or not utils.check_json(content, 'type'):
+        return ('error', -1, 'no db_name or type field!')
+
+    db_name = content['db_name']
+    db_type = content['type']
+    table_meta = content['tables']
+
+    for _, db_instance in DB_MAP.items():
+        if db_name == db_instance.name():
+            db_instance.load(table_meta)
+            return ('success', 200, 'load data succeed!')
+
+    if db_type == 'spark':
+        db_instance = spark.Spark(content)
+        db_instance.load(table_meta)
+        DB_MAP[str(db_instance.id())] = db_instance
+        return ('success', 200, 'load data succeed!')
+
+    return ('error', -1, 'sorry, but unsupported db type!')
+
+def reload_data(content):
+    if not utils.check_json(content, 'db_name') \
+        or not utils.check_json(content, 'type'):
+        return ('error', -1, 'no db_name or type field!')
+
+    db_name = content['db_name']
+    db_type = content['type']
+    table_meta = content['tables']
+
+    for _, db_instance in DB_MAP.items():
+        if db_name == db_instance.name():
+            db_instance.load(table_meta)
+            return ('success', 200, 'load data succeed!')
+
+    if db_type == 'spark':
+        db_instance = spark.Spark(content)
+        db_instance.load(table_meta)
+        DB_MAP[str(db_instance.id())] = db_instance
+        return ('success', 200, 'load data succeed!')
+
+    return ('error', -1, 'sorry, but unsupported db type!')
+
 def load_data(content):
+    print("AAAA", content)
+    print("DDDDEEEE", type(content))
     if not utils.check_json(content, 'db_name') \
         or not utils.check_json(content, 'type'):
         return ('error', -1, 'no db_name or type field!')
@@ -153,6 +199,7 @@ def db_query():
     """
     /db/query handler
     """
+
     if not utils.check_json(request.json, 'id') \
             or not utils.check_json(request.json, 'query') \
             or not utils.check_json(request.json['query'], 'type') \
