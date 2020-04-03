@@ -28,55 +28,61 @@ API = Blueprint('app_api', __name__)
 DB_MAP = {}
 
 def unload_data(content):
-    if not utils.check_json(content, 'db_name') \
-        or not utils.check_json(content, 'type'):
-        return ('error', -1, 'no db_name or type field!')
+    check = _check_json(content, ['db_name', 'type'])
+    if not check[0]:
+        return check[1]
+
+    is_all = content.get("is_all", False)
+    table_meta = content.get("tables", [])
+    if not is_all and not table_meta:
+        return  ('error', -1, 'tables is empty!')
 
     db_name = content['db_name']
     db_type = content['type']
-    table_meta = content['tables']
 
     for _, db_instance in DB_MAP.items():
         if db_name == db_instance.name():
-            db_instance.load(table_meta)
+            if is_all:
+                db_instance.unload_all()
+            else:
+                db_instance.unload(table_meta)
             return ('success', 200, 'load data succeed!')
 
-    if db_type == 'spark':
-        db_instance = spark.Spark(content)
-        db_instance.load(table_meta)
-        DB_MAP[str(db_instance.id())] = db_instance
-        return ('success', 200, 'load data succeed!')
-
-    return ('error', -1, 'sorry, but unsupported db type!')
+    return ('error', -1, 'cant not find db:%s!'%db_name)
 
 def reload_data(content):
-    if not utils.check_json(content, 'db_name') \
-        or not utils.check_json(content, 'type'):
-        return ('error', -1, 'no db_name or type field!')
+    check = _check_json(content, ['db_name', 'type'])
+    if not check[0]:
+        return check[1]
+
+    is_all = content.get("is_all", False)
+    table_meta = content.get("tables", [])
+    if not is_all and not table_meta:
+        return  ('error', -1, 'tables is empty!')
 
     db_name = content['db_name']
     db_type = content['type']
-    table_meta = content['tables']
 
     for _, db_instance in DB_MAP.items():
         if db_name == db_instance.name():
-            db_instance.load(table_meta)
-            return ('success', 200, 'load data succeed!')
+            if is_all:
+                db_instance.reload_all(table_meta)
+            else:
+                db_instance.reload(table_meta)
+            return ('success', 200, 'reload data succeed!')
 
-    if db_type == 'spark':
-        db_instance = spark.Spark(content)
-        db_instance.load(table_meta)
-        DB_MAP[str(db_instance.id())] = db_instance
-        return ('success', 200, 'load data succeed!')
+    return ('error', -1, 'cant not find db:%s!'%db_name)
 
-    return ('error', -1, 'sorry, but unsupported db type!')
+def _check_json(content, keys):
+    for key in keys:
+        if not utils.check_json(content, key):
+            return False, 'error', -1, 'no %s'%key
+    return True,
 
 def load_data(content):
-    print("AAAA", content)
-    print("DDDDEEEE", type(content))
-    if not utils.check_json(content, 'db_name') \
-        or not utils.check_json(content, 'type'):
-        return ('error', -1, 'no db_name or type field!')
+    check = _check_json(content, ['db_name', 'type', 'tables'])
+    if not check[0]:
+        return check[1]
 
     db_name = content['db_name']
     db_type = content['type']

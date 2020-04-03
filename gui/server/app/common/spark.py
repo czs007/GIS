@@ -31,11 +31,7 @@ class Spark(db.DB):
         self._db_id = "1"
         self._db_name = db_config['db_name']
         self._db_type = 'spark'
-        self._table_list = []
-        self._tables_meta = []
-        self._tables_name = []
-        self._tables_index = {}
-        self._tables_parents = []
+        self._reset_tables()
 
         print("init spark begin")
         import socket
@@ -57,6 +53,13 @@ class Spark(db.DB):
 
         print("init spark done")
         register_funcs(self.session)
+
+    def _reset_tables(self):
+        self._table_list = []
+        self._tables_meta = []
+        self._tables_name = []
+        self._tables_index = {}
+        self._tables_parents = []
 
     def table_list(self):
         return self._table_list
@@ -94,8 +97,19 @@ class Spark(db.DB):
         _df = self.run(sql)
         return _df.coalesce(1).toJSON().collect()
 
-    def load(self, metas):
-        for meta in metas:
+    def unload(self, table_metas):
+        pass
+
+
+    def _update_table_metas(self, tables_meta, is_replace=False):
+        if is_replace:
+            self._reset_tables()
+            self._tables_meta = tables_meta
+            self._process_tables_meta()
+            return
+
+    def load(self, table_metas):
+        for meta in table_metas:
             if 'path' in meta and 'schema' in meta and 'format' in meta:
                 options = meta.get('options', None)
 
@@ -116,7 +130,7 @@ class Spark(db.DB):
 
             if meta.get('visibility') == 'True':
                 self._table_list.append('global_temp.' + meta.get('name'))
-        self._tables_meta = metas
+        self._tables_meta = table_metas
         self._process_tables_meta()
 
     def _process_tables_meta(self):
