@@ -16,9 +16,8 @@ limitations under the License.
 
 from pyspark.sql import SparkSession
 
-from app.common import db
+from app.common import db, utils
 from arctern_pyspark import register_funcs
-
 
 class Spark(db.DB):
     def __init__(self, db_config):
@@ -98,8 +97,11 @@ class Spark(db.DB):
         return _df.coalesce(1).toJSON().collect()
 
     def unload(self, table_metas):
-        pass
-
+        """
+            根据 已有的关系，推导出所有要 unload的表
+        """
+        self.session.catalog.dropGlobalTempView("nyc_taxi")
+        # self.session.catalog.listTables()
 
     def _update_table_metas(self, tables_meta, is_replace=False):
         if is_replace:
@@ -132,6 +134,7 @@ class Spark(db.DB):
                 self._table_list.append('global_temp.' + meta.get('name'))
         self._tables_meta = table_metas
         self._process_tables_meta()
+        self.my_test()
 
     def _process_tables_meta(self):
         for i, table in enumerate(self._tables_meta):
@@ -161,6 +164,32 @@ class Spark(db.DB):
                         self._tables_parents[change] = new_parents | parents
             changed = new_changed
 
+    def _get_related_tables(self, table_names):
+        table_names = utils.unique_list(table_names)
+        in_indexs = []
+        out_names = []
+        for name in table_names:
+            if name in self._tables_index:
+                in_indexs.append(self._tables_index[name])
+            else:
+                out_names.append(name)
+
+        ret = set()
+        for index in in_indexs:
+            ret |= self._get_table_children(index)
+
+        ret |= set(in_indexs)
+        ret = list(ret)
+        ret.sort()
+        in_names = [self._tables_name[index] for index in ret]
+        return in_names, out_names
+
+    def _get_table_children(self, index):
+        ret = set()
+        for i, parents in enumerate(self._tables_parents):
+            if index in parents:
+                ret.add(i)
+        return ret
 
     def get_reload_tables(self, table_names):
         indexs = []
@@ -169,16 +198,9 @@ class Spark(db.DB):
                 return []
             indexs.append(self._tables_index[name])
 
-        def _get_children_for_one(index):
-            ret = set()
-            for i, parents in enumerate(self._tables_parents):
-                if index in parents:
-                    ret.add(i)
-            return ret
-
         ret = set()
         for index in indexs:
-            ret |= _get_children_for_one(index)
+            ret |= self._get_table_children(index)
 
         ret |= set(indexs)
         ret = list(ret)
@@ -188,3 +210,9 @@ class Spark(db.DB):
 
     def get_table_info(self, table_name):
         return self.run_for_json("desc table {}".format(table_name))
+
+    def my_test(self):
+        ret = self.session.catalog.listTables()
+        print("listTables ret:", ret)
+        # is_cached = self.session.catalog.isCached("nyc_taxi")
+        # print("nyc_taxi is cached?:", is_cached)

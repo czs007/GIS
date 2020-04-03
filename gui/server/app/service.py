@@ -46,7 +46,7 @@ def unload_data(content):
                 db_instance.unload_all()
             else:
                 db_instance.unload(table_meta)
-            return ('success', 200, 'load data succeed!')
+            return ('success', 200, 'unload data succeed!')
 
     return ('error', -1, 'cant not find db:%s!'%db_name)
 
@@ -100,6 +100,25 @@ def load_data(content):
         return ('success', 200, 'load data succeed!')
 
     return ('error', -1, 'sorry, but unsupported db type!')
+
+def my_test(content):
+    check = _check_json(content, ['id',])
+    if not check[0]:
+        return check[1]
+
+    db_id = content['id']
+    db_instance = DB_MAP[db_id]
+    db_instance.my_test()
+
+    return ('error', -1, 'sorry, but unsupported db type!')
+
+@API.route('/test', methods=['POST'])
+def test():
+    """
+    use this function to load data
+    """
+    status, code, message = my_test(request.json)
+    return jsonify(status=status, code=code, message=message)
 
 @API.route('/load', methods=['POST'])
 @token.AUTH.login_required

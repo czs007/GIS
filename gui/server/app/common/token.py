@@ -24,7 +24,6 @@ from app.common import utils
 # -H "Authorization: Token <jws-token>"
 AUTH = HTTPTokenAuth(scheme='Token')
 
-
 def create(username, expire):
     """
     create a token for account

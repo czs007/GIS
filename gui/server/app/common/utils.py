@@ -19,3 +19,16 @@ def check_json(node, key):
     check whether the node contains key
     """
     return node and key in node
+
+
+def unique_list(elem_list):
+    """
+    Remove duplicate elements and preserve order
+    """
+    ret = []
+    for elem in elem_list:
+        if elem not in ret:
+            ret.append(elem)
+    return ret
+
+
