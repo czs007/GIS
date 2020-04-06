@@ -30,7 +30,7 @@ DB_MAP = {}
 def unload_data(content):
     check = _check_json(content, ['db_name', 'type'])
     if not check[0]:
-        return check[1]
+        return check[1:]
 
     is_all = content.get("is_all", False)
     table_meta = content.get("tables", [])
@@ -53,7 +53,7 @@ def unload_data(content):
 def reload_data(content):
     check = _check_json(content, ['db_name', 'type'])
     if not check[0]:
-        return check[1]
+        return check[1:]
 
     is_all = content.get("is_all", False)
     table_meta = content.get("tables", [])
@@ -103,14 +103,15 @@ def load_data(content):
 
 def my_test(content):
     check = _check_json(content, ['id',])
+    print("CHECK: ", check)
     if not check[0]:
-        return check[1]
+        return check[1:]
 
     db_id = content['id']
     db_instance = DB_MAP[db_id]
     db_instance.my_test()
+    return ('success', 200, 'test succeed!')
 
-    return ('error', -1, 'sorry, but unsupported db type!')
 
 @API.route('/test', methods=['POST'])
 def test():

@@ -127,9 +127,12 @@ class Spark(db.DB):
                     .load(meta.get('path'), **options)
                 df.createOrReplaceGlobalTempView(meta.get('name'))
             elif 'sql' in meta:
-                df = self.run(meta.get('sql', None))
+                df = self.session.sql(meta.get('sql', None))
                 df.createOrReplaceGlobalTempView(meta.get('name'))
-
+                sql_str = "CACHE TABLE global_temp.%s"%meta.get('name')
+                print("cache ..... %s"%sql_str)
+                self.session.sql(sql_str)
+            print("current database :", self.session.catalog.currentDatabase())
             if meta.get('visibility') == 'True':
                 self._table_list.append('global_temp.' + meta.get('name'))
         self._tables_meta = table_metas
@@ -214,5 +217,3 @@ class Spark(db.DB):
     def my_test(self):
         ret = self.session.catalog.listTables()
         print("listTables ret:", ret)
-        # is_cached = self.session.catalog.isCached("nyc_taxi")
-        # print("nyc_taxi is cached?:", is_cached)
