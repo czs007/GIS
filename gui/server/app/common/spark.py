@@ -134,7 +134,7 @@ class Spark(db.DB):
                 #self.session.sql(sql_str)
             print("current database :", self.session.catalog.currentDatabase())
             if meta.get('visibility') == 'True':
-                self._table_list.append('global_temp.' + meta.get('name'))
+                self._table_list.append(meta.get('name'))
         self._tables_meta = table_metas
         self._process_tables_meta()
         self.my_test()

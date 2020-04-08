@@ -25,8 +25,6 @@ from app.common import spark, token, utils, db
 
 API = Blueprint('app_api', __name__)
 
-DB_MAP = {}
-
 def unload_data(content):
     check = _check_json(content, ['db_name', 'type'])
     if not check[0]:
@@ -40,7 +38,7 @@ def unload_data(content):
     db_name = content['db_name']
     db_type = content['type']
 
-    for _, db_instance in DB_MAP.items():
+    for _, db_instance in db.CENTER.items():
         if db_name == db_instance.name():
             if is_all:
                 db_instance.unload_all()
@@ -63,7 +61,7 @@ def reload_data(content):
     db_name = content['db_name']
     db_type = content['type']
 
-    for _, db_instance in DB_MAP.items():
+    for _, db_instance in db.CENTER.items():
         if db_name == db_instance.name():
             if is_all:
                 db_instance.reload_all(table_meta)
@@ -108,7 +106,7 @@ def my_test(content):
         return check[1:]
 
     db_id = content['id']
-    db_instance = DB_MAP[db_id]
+    db_instance = db.CENTER[db_id]
     db_instance.my_test()
     return ('success', 200, 'test succeed!')
 
