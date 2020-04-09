@@ -2259,6 +2259,38 @@ TEST(geometry_test, test_ST_Intersects) {
   ASSERT_EQ(res_bool->Value(49), true);
 }
 
+TEST(geometry_test, test_ST_Within2) {
+  auto circle = "curvepolygon(circularstring(-1 -1, 1 1, -1 -1))";
+
+  arrow::StringBuilder str_builder;
+  str_builder.Append("point(1.414 0)");
+  str_builder.Append("point(1.5 0)");
+  str_builder.Append("point(0.5 0)");
+  str_builder.Append("point(2 3)");
+  str_builder.Append("point(0 0)");
+
+  std::shared_ptr<arrow::Array> pointer_array;
+  str_builder.Finish(&pointer_array);
+
+  str_builder.Append(circle);
+  str_builder.Append(circle);
+  str_builder.Append(circle);
+  str_builder.Append(circle);
+  str_builder.Append("curvepolygon(circularstring(-1 -1, 1 1, 1.4141 0))");
+
+  std::shared_ptr<arrow::Array> circle_array;
+  str_builder.Finish(&circle_array);
+
+  auto res = arctern::gis::ST_Within(arctern::gis::ST_GeomFromText(pointer_array),
+                                     arctern::gis::ST_GeomFromText(circle_array));
+  auto res_bool = std::static_pointer_cast<arrow::BooleanArray>(res);
+
+  ASSERT_EQ(res_bool->Value(0), true);
+  ASSERT_EQ(res_bool->Value(1), false);
+  ASSERT_EQ(res_bool->Value(2), true);
+  ASSERT_EQ(res_bool->Value(3), false);
+}
+
 TEST(geometry_test, test_ST_Within) {
   auto l1 = "POINT (1 0)";
   auto l2 = "POINT (1 3)";
@@ -3410,6 +3442,38 @@ TEST(geometry_test, test_ST_GeomFromGeoJSON) {
   ASSERT_EQ(res_str->GetString(1), "LINESTRING (1 2,4 5,7 8)");
   ASSERT_EQ(res_str->GetString(2), "POLYGON ((0 0,0 1,1 1,1 0,0 0))");
   ASSERT_TRUE(res_str->IsNull(3));
+}
+
+TEST(geometry_test, test_ST_GeomFromText2) {
+  auto p0 = "LINESTRING(0 0,1.23e-11 1.45e-12)";
+  auto p1 = "LINESTRING(0 0,1.343e-12 1.78e-12)";
+  auto p2 = "LINESTRING(-1.12e-08 -9.2e-08,1.2134e-10 1.423e-10)";
+  auto p3 = "POINT(1.132321e-12 2.3123123e-12)";
+  auto p4 = "POINT(1.1e-11 1.567)";
+  auto p5 = "POLYGON((1e-11 1e-11,3.231 1.098,3.765 9.555,1 7,1e-11 1e-11))";
+
+  arrow::StringBuilder builder;
+  std::shared_ptr<arrow::Array> input;
+  builder.Append(std::string(p0));
+  builder.Append(std::string(p1));
+  builder.Append(std::string(p2));
+  builder.Append(std::string(p3));
+  builder.Append(std::string(p4));
+  builder.Append(std::string(p5));
+
+  builder.Finish(&input);
+  auto res = arctern::gis::ST_AsText(arctern::gis::ST_GeomFromText(input));
+  auto res_str = std::static_pointer_cast<arrow::StringArray>(res);
+
+  ASSERT_EQ(res_str->GetString(0), "LINESTRING (0 0,0.0000000000123 0.00000000000145)");
+  ASSERT_EQ(res_str->GetString(1), "LINESTRING (0 0,0.000000000001343 0.00000000000178)");
+  ASSERT_EQ(res_str->GetString(2),
+            "LINESTRING (-0.0000000112 -0.000000092,0.00000000012134 0.0000000001423)");
+  ASSERT_EQ(res_str->GetString(3), "POINT (0.000000000001132 0.000000000002312)");
+  ASSERT_EQ(res_str->GetString(4), "POINT (0.000000000011 1.567)");
+  ASSERT_EQ(res_str->GetString(5),
+            "POLYGON ((0.00000000001 0.00000000001,3.231 1.098,3.765 9.555,1 "
+            "7,0.00000000001 0.00000000001))");
 }
 
 TEST(geometry_test, test_ST_GeomFromText) {
