@@ -15,7 +15,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
 import logging
 import getopt
 import sys
@@ -201,7 +200,7 @@ def modify_zeppelin_xml():
     workspace = get_meta_value("workspace", default="")
     dir_path = os.path.join(workspace, "zeppelin", "conf")
     if not os.path.exists(dir_path):
-        print("zeppelin path not exist, please bootsrap!")
+        print("zeppelin path not exist, please bootstrap!")
         sys.exit(0)
     old_file_path = os.path.join(dir_path, "zeppelin-site.xml.template")
     new_file_path = os.path.join(dir_path, "zeppelin-site.xml")
@@ -275,6 +274,7 @@ def config_bootstrap(args):
         args.workspace = "./"
         print("config args.workspace to default ./ ")
     abs_path = os.path.abspath(args.workspace)
+    os.makedirs(abs_path, exist_ok=True)
     write_meta_value("workspace", abs_path)
     download_zeppelin()
     print("done.")
