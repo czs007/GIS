@@ -354,3 +354,10 @@ def ST_Envelope_Aggr(object geo_arr):
 
 def GIS_Version():
     return arctern_core_pxd.GIS_Version()
+
+
+def get_parallelism():
+    return arctern_core_pxd.get_parallelism()
+
+def set_parallelism(int parallelism):
+    return arctern_core_pxd.set_parallelism(parallelism)

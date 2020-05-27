@@ -26,6 +26,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <omp.h>
 
 #include "common/version.h"
 #include "gis/gdal/arctern_geos.h"
@@ -36,6 +37,9 @@
 namespace arctern {
 namespace gis {
 namespace gdal {
+
+static int omp_parallelism = 0;
+static int num_of_procs = 0;
 
 // inline void* Wrapper_OGR_G_Centroid(void* geo) {
 //   void* centroid = new OGRPoint();
@@ -318,7 +322,6 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
   auto len = array->length();
   ChunkArrayBuilder<T> builder;
   std::vector<std::shared_ptr<arrow::Array>> result_array;
-
   for (int i = 0; i < len; ++i) {
     auto geo = Wrapper_createFromWkb(wkb, i);
     if (geo == nullptr) {
@@ -1252,6 +1255,23 @@ std::shared_ptr<arrow::Array> ST_Envelope_Aggr(
   CHECK_ARROW(builder.Finish(&results));
   return results;
 }
+
+void set_parallelism(int parallelism){
+    if (parallelism >= 0){
+	omp_parallelism = parallelism;
+    }
+}
+
+int get_parallelism(){
+    if(omp_parallelism){
+	return omp_parallelism;
+    }
+    if (0 == num_of_procs){
+	num_of_procs = omp_get_num_procs();
+    }
+    return num_of_procs;
+}
+
 
 }  // namespace gdal
 }  // namespace gis

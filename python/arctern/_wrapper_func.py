@@ -14,6 +14,8 @@
 # pylint: disable=too-many-lines
 
 __all__ = [
+    "get_parallelism",
+    "set_parallelism",
     "ST_Point",
     "ST_Intersection",
     "ST_IsValid",
@@ -63,7 +65,6 @@ __all__ = [
 
 import base64
 from . import arctern_core_
-
 
 def arctern_udf(*arg_types):
     def decorate(func):
@@ -1538,3 +1539,9 @@ def version():
     :return: version of arctern
     """
     return arctern_core_.GIS_Version().decode("utf-8")
+
+def get_parallelism():
+    return arctern_core_.get_parallelism()
+
+def set_parallelism(parallelism):
+    return arctern_core_.set_parallelism(parallelism)

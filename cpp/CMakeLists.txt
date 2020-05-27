@@ -126,6 +126,12 @@ else()
 
 endif()
 
+
+if (BUILD_WITH_OPENMP)
+	message("build with openmp.")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+endif()
+
 #message(STATUS "CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 # Arch info over
 

@@ -133,6 +133,8 @@ std::shared_ptr<arrow::Array> ST_Envelope_Aggr(
     const std::shared_ptr<arrow::Array>& geo_arr);
 
 std::string GIS_Version();
+int get_parallelism();
+void set_parallelism(int);
 
 }  // namespace gis
 }  // namespace arctern

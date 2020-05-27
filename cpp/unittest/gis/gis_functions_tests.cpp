@@ -18,6 +18,7 @@
 #include <arrow/array.h>
 #include <gtest/gtest.h>
 #include <ogr_geometry.h>
+#include <omp.h>
 
 #include <ctime>
 #include <iostream>
