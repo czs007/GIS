@@ -16,6 +16,7 @@
 
 #include "gis/gdal/gis_functions.h"
 
+#include <omp.h>
 #include <ogr_api.h>
 #include <ogrsf_frmts.h>
 
@@ -26,7 +27,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <omp.h>
 
 #include "common/version.h"
 #include "gis/gdal/arctern_geos.h"
@@ -367,7 +367,7 @@ typename std::enable_if<std::is_base_of<arrow::ArrayBuilder, T>::value,
                         std::shared_ptr<typename arrow::Array>>::type
 UnaryOp(const std::shared_ptr<arrow::Array>& array,
         std::function<bool(ArrayValue<A>&, OGRGeometry*)> op,
-        std::function<void(ChunkArrayBuilder<T>&, ArrayValue<A>&)>
+        std::function<void(T&, ArrayValue<A>&)>
 	     append_op = nullptr) {
 
   auto wkb = std::static_pointer_cast<arrow::BinaryArray>(array);
@@ -376,6 +376,7 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
 
   std::vector<ArrayValue<A>> array_values(len);
 
+  #pragma omp parallel for
   for (int i = 0; i < len; ++i) {
     auto geo = Wrapper_createFromWkb(wkb, i);
     auto & item = array_values[i];
@@ -391,9 +392,9 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
   }
 
   if (append_op) {
-      for (const auto & item: array_values){
+      for (auto & item: array_values){
           if (item.is_null){
-		  builder.array_builder.AppendNull();
+		  builder.AppendNull();
 	  }else{
 		  append_op(builder, item);
 	  }
@@ -419,6 +420,7 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
   std::vector<std::shared_ptr<arrow::Array>> result_array;
   std::vector<ArrayValue<A>> array_values(len);
 
+  #pragma omp parallel for
   for (int i = 0; i < len; ++i) {
     auto geo = Wrapper_createFromWkb(wkb, i);
     bool keep_geo = false;
@@ -434,9 +436,9 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
   }
 
   if (append_op) {
-      for (const auto & item: array_values){
+      for (auto & item: array_values){
           if (item.is_null){
-		  builder.array_builder.AppendNull();
+	      	builder.array_builder.AppendNull();
           }else{
 		auto array_ptr = append_op(builder, item);
 		if (array_ptr != nullptr) result_array.push_back(array_ptr);
@@ -449,41 +451,6 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
   result_array.push_back(array_ptr);
   return result_array;
 }
-
-// template <typename T>
-// typename std::enable_if<std::is_base_of<arrow::ArrayBuilder, T>::value,
-//                         std::shared_ptr<typename arrow::Array>>::type
-// BinaryOp(const std::shared_ptr<arrow::Array>& geo1,
-//          const std::shared_ptr<arrow::Array>& geo2,
-//          std::function<void(T&, OGRGeometry*, OGRGeometry*)> op,
-//          std::function<void(T&, OGRGeometry*, OGRGeometry*)> null_op = nullptr) {
-//   auto len = geo1->length();
-//   auto wkt1 = std::static_pointer_cast<arrow::BinaryArray>(geo1);
-//   auto wkt2 = std::static_pointer_cast<arrow::BinaryArray>(geo2);
-//   T builder;
-//   for (int i = 0; i < len; ++i) {
-//     auto ogr1 = Wrapper_createFromWkb(wkt1, i);
-//     auto ogr2 = Wrapper_createFromWkb(wkt2, i);
-//     if ((ogr1 == nullptr) && (ogr2 == nullptr)) {
-//       builder.AppendNull();
-//     } else if ((ogr1 == nullptr) || (ogr2 == nullptr)) {
-//       if (null_op == nullptr) {
-//         builder.AppendNull();
-//       } else {
-//         null_op(builder, ogr1, ogr2);
-//       }
-//     } else {
-//       op(builder, ogr1, ogr2);
-//     }
-//     OGRGeometryFactory::destroyGeometry(ogr1);
-//     OGRGeometryFactory::destroyGeometry(ogr2);
-//   }
-//   std::shared_ptr<arrow::Array> results;
-//   CHECK_ARROW(builder.Finish(&results));
-//   return results;
-// }
-//
-
 
 template <typename T, typename A>
 typename std::enable_if<std::is_base_of<arrow::ArrayBuilder, T>::value,
@@ -513,6 +480,7 @@ BinaryOp(const std::vector<std::shared_ptr<typename arrow::Array>>& geo1,
 
   std::vector<ArrayValue<A>> array_values(total_geo);
 
+  #pragma omp parallel for
   for (int i = 0; i < total_geo; ++i){
 	ChunkArrayIdx<WkbItem> idx0;
 	ChunkArrayIdx<WkbItem> idx1;
@@ -530,7 +498,7 @@ BinaryOp(const std::vector<std::shared_ptr<typename arrow::Array>>& geo1,
 	null_op(array_values[i], ogr1, ogr2);
       }
     } else {
-	array_values[i].item_value = op(ogr1, ogr2);
+	op(array_values[i], ogr1, ogr2);
     }
     OGRGeometryFactory::destroyGeometry(ogr1);
     OGRGeometryFactory::destroyGeometry(ogr2);
@@ -538,7 +506,7 @@ BinaryOp(const std::vector<std::shared_ptr<typename arrow::Array>>& geo1,
 
   std::vector<std::shared_ptr<arrow::Array>> result_array;
   if (append_op) {
-      for (const auto & item: array_values){
+      for (auto & item: array_values){
 	if(item.is_null){
 	   builder.array_builder.AppendNull();
 	}else{
@@ -681,13 +649,13 @@ std::vector<std::shared_ptr<arrow::Array>> ST_GeomFromText(
 std::vector<std::shared_ptr<arrow::Array>> ST_AsText(
     const std::shared_ptr<arrow::Array>& wkb) {
 
-  auto append_op = [](ChunkArrayBuilder<arrow::StringBuilder>& builder, ArrayValue<char*> item) {
+  auto append_op = [](ChunkArrayBuilder<arrow::StringBuilder>& builder, ArrayValue<char*> & item) {
     auto result = AppendString(builder, item.item_value);
     CPLFree(item.item_value);
     return result;
-  }
+  };
 
-  auto op = [](ArrayValue<char *> & value, OGRGeometry* geo) {
+  auto op = [](ArrayValue<char*> & value, OGRGeometry* geo) {
     char* str;
     auto err_code = geo->exportToWkt(&str);
     value.is_null = err_code != OGRERR_NONE;
@@ -701,15 +669,15 @@ std::vector<std::shared_ptr<arrow::Array>> ST_AsText(
 std::vector<std::shared_ptr<arrow::Array>> ST_AsGeoJSON(
     const std::shared_ptr<arrow::Array>& wkb) {
 
-  auto append_op = [](ChunkArrayBuilder<arrow::StringBuilder>& builder, ArrayValue<char*> item) {
+  auto append_op = [](ChunkArrayBuilder<arrow::StringBuilder>& builder, ArrayValue<char*>& item) {
     auto result = AppendString(builder, item.item_value);
     CPLFree(item.item_value);
     return result;
-  }
+  };
 
   auto op = [](ArrayValue<char *> & value, OGRGeometry* geo) {
     char* str = geo->exportToJson();
-    value.is_null = str == nullptr
+    value.is_null = str == nullptr;
     value.item_value = str;
     return false;
    };
@@ -720,9 +688,9 @@ std::vector<std::shared_ptr<arrow::Array>> ST_AsGeoJSON(
 /************************* GEOMETRY ACCESSOR **************************/
 std::shared_ptr<arrow::Array> ST_IsValid(const std::shared_ptr<arrow::Array>& array) {
 
-  auto append_op = [](arrow::BooleanBuilder& builder, ArrayValue<bool> item) {
-	return AppendBoolean(builder, item.item_value); 
-  }
+  auto append_op = [](arrow::BooleanBuilder& builder, ArrayValue<bool>& item) {
+	builder.Append(item.item_value);
+  };
 
   auto op = [](ArrayValue<bool> & value, OGRGeometry* geo) {
     value.item_value = geo->IsValid() != 0;
@@ -735,10 +703,9 @@ std::shared_ptr<arrow::Array> ST_IsValid(const std::shared_ptr<arrow::Array>& ar
 std::shared_ptr<arrow::Array> ST_GeometryType(
     const std::shared_ptr<arrow::Array>& array) {
 
-  auto append_op = [](ChunkArrayBuilder<arrow::StringBuilder>& builder, ArrayValue<std::string> item) {
-
-    return AppendString(builder, item.item_value);
-  }
+  auto append_op = [](arrow::StringBuilder& builder, ArrayValue<std::string>& item) {
+  	builder.Append(item.item_value);
+  };
 
   auto op = [](ArrayValue<std::string> &value, OGRGeometry* geo) {
     std::string name = std::string("ST_") + geo->getGeometryName();
@@ -752,16 +719,16 @@ std::shared_ptr<arrow::Array> ST_GeometryType(
 std::shared_ptr<arrow::Array> ST_IsSimple(const std::shared_ptr<arrow::Array>& array) {
   const char* papszOptions[] = {(const char*)"ADD_INTERMEDIATE_POINT=YES", nullptr};
 
-  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> item) {
-    return AppendBoolean(builder, item.item_value);
-  }
+  auto append_op = [](arrow::BooleanBuilder& builder, ArrayValue<bool>& item) {
+  	builder.Append(item.item_value);
+  };
 
   auto op = [&papszOptions](ArrayValue<bool>& value,
                                            OGRGeometry* geo) {
     HasCircularVisitor has_circular;
-    has_circular->reset();
-    geo->accept(has_circular);
-    if (has_circular->has_circular()) {
+    has_circular.reset();
+    geo->accept(&has_circular);
+    if (has_circular.has_circular()) {
       auto linear = geo->getLinearGeometry(0, papszOptions);
       value.item_value = linear->IsSimple() != 0;
       OGRGeometryFactory::destroyGeometry(linear);
@@ -771,21 +738,20 @@ std::shared_ptr<arrow::Array> ST_IsSimple(const std::shared_ptr<arrow::Array>& a
     return false;
   };
 
-  auto results = UnaryOp<arrow::BooleanBuilder, bool>(array, op, append_op);
-  return results;
+  return UnaryOp<arrow::BooleanBuilder, bool>(array, op, append_op);
 }
 
 std::shared_ptr<arrow::Array> ST_NPoints(const std::shared_ptr<arrow::Array>& array) {
 
-  auto append_op = [](ChunkArrayBuilder<arrow::Int64Builder>& builder, ArrayValue<int64_t> item) {
+  auto append_op = [](arrow::Int64Builder& builder, ArrayValue<int64_t>& item) {
     builder.Append(item.item_value);
-  }
+  };
 
   auto op = [](ArrayValue<int64_t>& value, OGRGeometry* geo) {
     NPointsVisitor npoints;
-    npoints->reset();
-    geo->accept(npoints);
-    value.item_value = npoints->npoints();
+    npoints.reset();
+    geo->accept(&npoints);
+    value.item_value = npoints.npoints();
     return false;
   };
 
@@ -794,37 +760,35 @@ std::shared_ptr<arrow::Array> ST_NPoints(const std::shared_ptr<arrow::Array>& ar
 
 std::shared_ptr<arrow::Array> ST_Envelope(const std::shared_ptr<arrow::Array>& array) {
 
-  auto append_op = [](ChunkArrayBuilder<arrow::BinaryBuilder>& builder, 
-		  ArrayValue<OGRGeometry*> item){
-	  AppendWkbNDR(builder, item.item_value);
-	  OGRGeometryFactory::destroyGeometry(item.item_value);
-  }
+  auto append_op = [](arrow::BinaryBuilder& builder, 
+		  ArrayValue<std::unique_ptr<OGRGeometry>> &item){
+     AppendWkbNDR(builder, item.item_value.get());
+  };
 
-  auto op = [](ArrayValue<OGRGeometry *> & item, OGRGeometry* geo) {
+  auto op = [](ArrayValue<std::unique_ptr<OGRGeometry>> &item, OGRGeometry* geo) {
     OGREnvelope env;
     bool result = false;
     if (geo->IsEmpty()) {
-      item.item_value = geo;
+      item.item_value = std::unique_ptr<OGRGeometry>(geo->clone());
       result = true;
     } else {
       result = false;
       OGR_G_GetEnvelope(geo, &env);
       if (env.MinX == env.MaxX) {    // vertical line or Point
         if (env.MinY == env.MaxY) {  // point
-	  OGRGeometry * point = new OGRPoint(env.MinX, env.MinY);
-          item.item_value = point; 
+	  item.item_value = std::move(std::make_unique<OGRPoint>(env.MinX, env.MinY));
         } else {  // line
-	  OGRGeometry * line = new OGRLineString();
+	  auto line = std::make_unique<OGRLineString>();
           line->addPoint(env.MinX, env.MinY);
           line->addPoint(env.MinX, env.MaxY);
-	  item.item_value = line;
+	  item.item_value = std::move(line);
         }
       } else {
         if (env.MinY == env.MaxY) {  // horizontal line
-	  OGRGeometry * line = new OGRLineString();
+	  auto line = std::make_unique<OGRLineString>();
           line->addPoint(env.MinX, env.MinY);
           line->addPoint(env.MaxX, env.MinY);
-	  item.item_value = line;
+	  item.item_value = std::move(line);
         } else {  // polygon
           OGRLinearRing ring;
           ring.addPoint(env.MinX, env.MinY);
@@ -832,16 +796,16 @@ std::shared_ptr<arrow::Array> ST_Envelope(const std::shared_ptr<arrow::Array>& a
           ring.addPoint(env.MaxX, env.MaxY);
           ring.addPoint(env.MaxX, env.MinY);
           ring.addPoint(env.MinX, env.MinY);
-	  OGRGeometry * polygon = new OGRPolygon();
+	  auto polygon = std::make_unique<OGRPolygon>();
           polygon->addRing(&ring);
-	  item.item_value = polygon;
+	  item.item_value = std::move(polygon);
         }
       }
     }
     return result;
   };
 
-  return UnaryOp<arrow::BinaryBuilder, OGRGeometry*>(array, op, append_op);
+  return UnaryOp<arrow::BinaryBuilder, std::unique_ptr<OGRGeometry>>(array, op, append_op);
 }
 
 /************************ GEOMETRY PROCESSING ************************/
@@ -854,7 +818,7 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Buffer(
 	  auto result = AppendWkb(builder, item.item_value);
 	  OGRGeometryFactory::destroyGeometry(item.item_value);
 	  return result;
-  }
+  };
 
   auto op = [&buffer_distance, &n_quadrant_segments](ArrayValue<OGRGeometry *> & item, OGRGeometry* geo) {
     auto buffer = geo->Buffer(buffer_distance, n_quadrant_segments);
@@ -866,33 +830,38 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Buffer(
 }
 
 std::shared_ptr<arrow::Array> ST_PrecisionReduce(
-    const std::shared_ptr<arrow::Array>& geometries, int32_t precision) {
+  const std::shared_ptr<arrow::Array>& geometries, int32_t precision) {
 
-  auto append_op = [](){
-    AppendWkbNDR(builder, geo);
-  }
-  auto precision_reduce_visitor = new PrecisionReduceVisitor(precision);
-  auto op = [&precision_reduce_visitor](ArrayValue<OGRGeometry*> & item, OGRGeometry* geo) {
-    geo->accept(precision_reduce_visitor);
-    return false;
+  auto append_op = [](arrow::BinaryBuilder& builder, ArrayValue<OGRGeometry *> &item){
+    AppendWkbNDR(builder, item.item_value);
+    OGRGeometryFactory::destroyGeometry(item.item_value);
   };
 
-  auto results = UnaryOp<arrow::BinaryBuilder>(geometries, op);
-  delete precision_reduce_visitor;
-  return results;
+  auto op = [&precision](ArrayValue<OGRGeometry*> & item, OGRGeometry* geo) {
+    PrecisionReduceVisitor precision_reduce_visitor(precision);
+    geo->accept(&precision_reduce_visitor);
+    item.item_value = geo;
+    return true;
+  };
+
+  return UnaryOp<arrow::BinaryBuilder, OGRGeometry *>(geometries, op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Intersection(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
+
   std::vector<std::vector<std::shared_ptr<arrow::Array>>> array_list{geo1, geo2};
   std::vector<ChunkArrayIdx<WkbItem>> idx_list(2);
+
   ChunkArrayBuilder<arrow::BinaryBuilder> builder;
+
   std::vector<std::shared_ptr<arrow::Array>> result_array;
-  bool is_null;
+
   auto has_curve = new HasCurveVisitor;
   OGRGeometryCollection empty;
 
+  bool is_null = false;
   while (GetNextValue(array_list, idx_list, is_null)) {
     auto ogr1 = idx_list[0].item_value.ToGeometry();
     auto ogr2 = idx_list[1].item_value.ToGeometry();
@@ -958,34 +927,51 @@ std::shared_ptr<arrow::Array> ST_MakeValid(const std::shared_ptr<arrow::Array>& 
 
 std::shared_ptr<arrow::Array> ST_SimplifyPreserveTopology(
     const std::shared_ptr<arrow::Array>& array, double distance_tolerance) {
-  auto op = [&distance_tolerance](arrow::BinaryBuilder& builder, OGRGeometry* geo) {
-    auto simple = geo->SimplifyPreserveTopology(distance_tolerance);
-    AppendWkbNDR(builder, simple);
-    OGRGeometryFactory::destroyGeometry(simple);
+
+  auto append_op = [](arrow::BinaryBuilder& builder, ArrayValue<OGRGeometry*> &item){
+    AppendWkbNDR(builder, item.item_value);
+    OGRGeometryFactory::destroyGeometry(item.item_value);
   };
-  return UnaryOp<arrow::BinaryBuilder>(array, op);
+
+  auto op = [&distance_tolerance](ArrayValue<OGRGeometry*> &item, OGRGeometry* geo) {
+    item.item_value = geo->SimplifyPreserveTopology(distance_tolerance);
+    return false;
+  };
+
+  return UnaryOp<arrow::BinaryBuilder, OGRGeometry *>(array, op, append_op);
 }
 
 std::shared_ptr<arrow::Array> ST_Centroid(const std::shared_ptr<arrow::Array>& array) {
-  OGRPoint centro_point;
-  auto op = [&centro_point](arrow::BinaryBuilder& builder, OGRGeometry* geo) {
-    auto err_code = geo->Centroid(&centro_point);
-    if (err_code == OGRERR_NONE) {
-      AppendWkbNDR(builder, &centro_point);
-    } else {
-      builder.AppendNull();
-    }
+
+  auto append_op = [](arrow::BinaryBuilder& builder, ArrayValue<std::unique_ptr<OGRGeometry>> &item){
+      AppendWkbNDR(builder, item.item_value.get());
   };
-  return UnaryOp<arrow::BinaryBuilder>(array, op);
+
+  auto op = [](ArrayValue<std::unique_ptr<OGRGeometry>> &item, OGRGeometry* geo) {
+    auto centro_point = std::make_unique<OGRPoint>();
+    auto err_code = geo->Centroid(centro_point.get());
+    if (err_code == OGRERR_NONE) {
+      item.item_value = std::move(centro_point);
+    } else {
+      item.is_null = true;
+    }
+    return false;
+  };
+  return UnaryOp<arrow::BinaryBuilder, std::unique_ptr<OGRGeometry>>(array, op, append_op);
 }
 
 std::shared_ptr<arrow::Array> ST_ConvexHull(const std::shared_ptr<arrow::Array>& array) {
-  auto op = [](arrow::BinaryBuilder& builder, OGRGeometry* geo) {
-    auto cvx = geo->ConvexHull();
-    AppendWkbNDR(builder, cvx);
-    OGRGeometryFactory::destroyGeometry(cvx);
+
+  auto append_op = [](arrow::BinaryBuilder& builder, ArrayValue<OGRGeometry*> &item){
+    AppendWkbNDR(builder, item.item_value);
+    OGRGeometryFactory::destroyGeometry(item.item_value);
   };
-  return UnaryOp<arrow::BinaryBuilder>(array, op);
+
+  auto op = [](ArrayValue<OGRGeometry*> &item, OGRGeometry* geo) {
+    item.item_value = geo->ConvexHull();
+    return false;
+  };
+  return UnaryOp<arrow::BinaryBuilder, OGRGeometry*>(array, op, append_op);
 }
 
 /*
@@ -994,6 +980,7 @@ std::shared_ptr<arrow::Array> ST_ConvexHull(const std::shared_ptr<arrow::Array>&
 std::shared_ptr<arrow::Array> ST_Transform(
     const std::shared_ptr<arrow::Array>& geometries, const std::string& src_rs,
     const std::string& dst_rs) {
+
   OGRSpatialReference oSrcSRS;
   oSrcSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
   if (oSrcSRS.SetFromUserInput(src_rs.c_str()) != OGRERR_NONE) {
@@ -1010,65 +997,93 @@ std::shared_ptr<arrow::Array> ST_Transform(
 
   void* poCT = OCTNewCoordinateTransformation(&oSrcSRS, &oDstS);
 
-  auto op = [&poCT](arrow::BinaryBuilder& builder, OGRGeometry* geo) {
+
+  auto append_op = [&poCT](arrow::BinaryBuilder& builder, ArrayValue<OGRGeometry*> &item) {
+      AppendWkbNDR(builder, item.item_value);
+      OGRGeometryFactory::destroyGeometry(item.item_value);
+  };
+
+  auto op = [&poCT](ArrayValue<OGRGeometry*> &item, OGRGeometry* geo) {
     auto err_code = geo->transform((OGRCoordinateTransformation*)poCT);
     if (err_code == OGRERR_NONE) {
-      AppendWkbNDR(builder, geo);
+      item.item_value = geo;
     } else {
-      builder.AppendNull();
+      item.is_null = true;
     }
+    return true;
   };
-  auto results = UnaryOp<arrow::BinaryBuilder>(geometries, op);
+  auto results = UnaryOp<arrow::BinaryBuilder, OGRGeometry*>(geometries, op, append_op);
   OCTDestroyCoordinateTransformation(poCT);
   return results;
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_CurveToLine(
     const std::shared_ptr<arrow::Array>& geometries) {
-  auto op = [](ChunkArrayBuilder<arrow::BinaryBuilder>& builder, OGRGeometry* geo) {
-    auto line = geo->getLinearGeometry();
-    auto array_ptr = AppendWkb(builder, line);
-    OGRGeometryFactory::destroyGeometry(line);
+
+  auto append_op = [](ChunkArrayBuilder<arrow::BinaryBuilder>& builder, ArrayValue<OGRGeometry*> &item) {
+    auto array_ptr = AppendWkb(builder, item.item_value);
+    OGRGeometryFactory::destroyGeometry(item.item_value);
     return array_ptr;
   };
-  return UnaryOp<arrow::BinaryBuilder>(geometries, op);
+
+  auto op = [](ArrayValue<OGRGeometry*> &item, OGRGeometry* geo) {
+    item.item_value = geo->getLinearGeometry();
+    return false;
+  };
+
+  return UnaryOp<arrow::BinaryBuilder, OGRGeometry*>(geometries, op, append_op);
 }
 
 /************************ MEASUREMENT FUNCTIONS ************************/
 
 std::shared_ptr<arrow::Array> ST_Area(const std::shared_ptr<arrow::Array>& geometries) {
-  auto* area = new AreaVisitor;
-  auto op = [&area](arrow::DoubleBuilder& builder, OGRGeometry* geo) {
-    area->reset();
-    geo->accept(area);
-    builder.Append(area->area());
+
+  auto append_op = [](arrow::DoubleBuilder& builder, ArrayValue<double> &item) {
+  	builder.Append(item.item_value);
   };
-  auto results = UnaryOp<arrow::DoubleBuilder>(geometries, op);
-  delete area;
-  return results;
+
+  auto op = [](ArrayValue<double> &item, OGRGeometry* geo) {
+    AreaVisitor area;
+    area.reset();
+    geo->accept(&area);
+    item.item_value = area.area();
+    return false;
+  };
+
+  return UnaryOp<arrow::DoubleBuilder, double>(geometries, op, append_op);
 }
 
 std::shared_ptr<arrow::Array> ST_Length(const std::shared_ptr<arrow::Array>& geometries) {
-  auto* len_sum = new LengthVisitor;
-  auto op = [&len_sum](arrow::DoubleBuilder& builder, OGRGeometry* geo) {
-    len_sum->reset();
-    geo->accept(len_sum);
-    builder.Append(len_sum->length());
+
+  auto append_op = [](arrow::DoubleBuilder& builder, ArrayValue<double> &item) {
+  	builder.Append(item.item_value);
   };
-  auto results = UnaryOp<arrow::DoubleBuilder>(geometries, op);
-  delete len_sum;
-  return results;
+
+  auto op = [](ArrayValue<double> &item, OGRGeometry* geo) {
+    LengthVisitor len_sum ;
+    len_sum.reset();
+    geo->accept(&len_sum);
+    item.item_value = len_sum.length();
+    return false;
+  };
+
+  return UnaryOp<arrow::DoubleBuilder, double>(geometries, op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_HausdorffDistance(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto geos_ctx = OGRGeometry::createGEOSContext();
-  auto op = [&geos_ctx](ChunkArrayBuilder<arrow::DoubleBuilder>& builder,
-                        OGRGeometry* ogr1, OGRGeometry* ogr2) {
-    std::shared_ptr<arrow::Array> array_ptr = nullptr;
+
+
+  auto append_op = [](ChunkArrayBuilder<arrow::DoubleBuilder>& builder, ArrayValue<double> &item){
+      return AppendDouble(builder, item.item_value);
+  };
+
+  auto op = [](ArrayValue<double> &item, OGRGeometry* ogr1, OGRGeometry* ogr2) {
+
+    auto geos_ctx = OGRGeometry::createGEOSContext();
     if (ogr1->IsEmpty() || ogr2->IsEmpty()) {
-      builder.array_builder.AppendNull();
+      item.is_null = true;
     } else {
       auto geos1 = ogr1->exportToGEOS(geos_ctx);
       auto geos2 = ogr2->exportToGEOS(geos_ctx);
@@ -1079,18 +1094,21 @@ std::vector<std::shared_ptr<arrow::Array>> ST_HausdorffDistance(
       }
       GEOSGeom_destroy_r(geos_ctx, geos1);
       GEOSGeom_destroy_r(geos_ctx, geos2);
-      array_ptr = AppendDouble(builder, dist);
+      item.item_value = dist;
     }
-    return array_ptr;
+    OGRGeometry::freeGEOSContext(geos_ctx);
   };
-  auto results = BinaryOp<arrow::DoubleBuilder>(geo1, geo2, op);
-  OGRGeometry::freeGEOSContext(geos_ctx);
-  return results;
+  return BinaryOp<arrow::DoubleBuilder, double>(geo1, geo2, op, nullptr, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_DistanceSphere(
     const std::vector<std::shared_ptr<arrow::Array>>& point_left,
     const std::vector<std::shared_ptr<arrow::Array>>& point_right) {
+
+  auto append_op = [](ChunkArrayBuilder<arrow::DoubleBuilder>& builder, ArrayValue<double> &item){
+        return AppendDouble(builder, item.item_value);
+  };
+
   auto distance = [](double fromlon, double fromlat, double tolon, double tolat) {
     double latitudeArc = (fromlat - tolat) * 0.017453292519943295769236907684886;
     double longitudeArc = (fromlon - tolon) * 0.017453292519943295769236907684886;
@@ -1103,11 +1121,10 @@ std::vector<std::shared_ptr<arrow::Array>> ST_DistanceSphere(
     return 6372797.560856 * (2.0 * asin(sqrt(latitudeH + tmp * lontitudeH)));
   };
 
-  auto op = [&distance](ChunkArrayBuilder<arrow::DoubleBuilder>& builder, OGRGeometry* g1,
+  auto op = [&distance](ArrayValue<double> & item, OGRGeometry* g1,
                         OGRGeometry* g2) {
-    std::shared_ptr<arrow::Array> array_ptr = nullptr;
     if ((g1->getGeometryType() != wkbPoint) || (g2->getGeometryType() != wkbPoint)) {
-      builder.array_builder.AppendNull();
+      item.is_null = true;
     } else {
       auto p1 = reinterpret_cast<OGRPoint*>(g1);
       auto p2 = reinterpret_cast<OGRPoint*>(g2);
@@ -1117,35 +1134,40 @@ std::vector<std::shared_ptr<arrow::Array>> ST_DistanceSphere(
       double tolon = p2->getY();
       if ((fromlat > 180) || (fromlat < -180) || (fromlon > 90) || (fromlon < -90) ||
           (tolat > 180) || (tolat < -180) || (tolon > 90) || (tolon < -90)) {
-        builder.array_builder.AppendNull();
+        item.is_null = true;
       } else {
-        array_ptr = AppendDouble(builder, distance(fromlat, fromlon, tolat, tolon));
+	item.item_value = distance(fromlat, fromlon, tolat, tolon);
       }
     }
-    return array_ptr;
   };
-  return BinaryOp<arrow::DoubleBuilder>(point_left, point_right, op);
+
+  return BinaryOp<arrow::DoubleBuilder, double>(point_left, point_right, op, nullptr, append_op);
 }
+
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Distance(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::DoubleBuilder>& builder, OGRGeometry* ogr1,
+
+  auto append_op = [](ChunkArrayBuilder<arrow::DoubleBuilder>& builder, ArrayValue<double> &item){
+        return  AppendDouble(builder, item.item_value);
+  };
+
+  auto op = [](ArrayValue<double> &item, OGRGeometry* ogr1,
                OGRGeometry* ogr2) {
-    std::shared_ptr<arrow::Array> array_ptr = nullptr;
     if (ogr1->IsEmpty() || ogr2->IsEmpty()) {
-      builder.array_builder.AppendNull();
+      item.is_null = true;
     } else {
       auto dist = ogr1->Distance(ogr2);
       if (dist < 0) {
-        builder.array_builder.AppendNull();
+        item.is_null = true;
       } else {
-        array_ptr = AppendDouble(builder, dist);
+        item.item_value = dist;
       }
     }
-    return array_ptr;
   };
-  return BinaryOp<arrow::DoubleBuilder>(geo1, geo2, op);
+
+  return BinaryOp<arrow::DoubleBuilder, double>(geo1, geo2, op, nullptr, append_op);
 }
 
 /************************ SPATIAL RELATIONSHIP ************************/
@@ -1164,88 +1186,135 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Distance(
 std::vector<std::shared_ptr<arrow::Array>> ST_Equals(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
+
+  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> &item){
+      return AppendBoolean(builder, item.item_value);
+  };
+
+  auto op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
                OGRGeometry* ogr2) {
     if (ogr1->IsEmpty() && ogr2->IsEmpty()) {
-      return AppendBoolean(builder, true);
+      item.item_value = true;
     } else if (ogr1->Within(ogr2) && ogr2->Within(ogr1)) {
-      return AppendBoolean(builder, true);
+      item.item_value = true;
     } else {
-      return AppendBoolean(builder, false);
+      item.item_value = false;
     }
   };
-  auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-                    OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
-  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+
+  auto null_op = [](ArrayValue<bool> & item, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { item.item_value = false; };
+
+  return BinaryOp<arrow::BooleanBuilder, bool>(geo1, geo2, op, null_op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Touches(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-               OGRGeometry* ogr2) {
-    return AppendBoolean(builder, ogr1->Touches(ogr2) != 0);
+
+  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> &item){
+    return AppendBoolean(builder, item.item_value);
   };
-  auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-                    OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
-  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+
+  auto op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+               OGRGeometry* ogr2) {
+	  item.item_value = ogr1->Touches(ogr2) != 0;
+  };
+
+  auto null_op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { item.item_value = false; };
+
+  return BinaryOp<arrow::BooleanBuilder, bool>(geo1, geo2, op, null_op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Overlaps(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-               OGRGeometry* ogr2) {
-    return AppendBoolean(builder, ogr1->Overlaps(ogr2) != 0);
+
+  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> &item){
+    return AppendBoolean(builder, item.item_value);
   };
-  auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-                    OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
-  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+
+  auto op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+               OGRGeometry* ogr2) {
+    item.item_value = ogr1->Overlaps(ogr2) != 0;
+  };
+
+  auto null_op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { item.item_value = false; };
+
+  return BinaryOp<arrow::BooleanBuilder, bool>(geo1, geo2, op, null_op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Crosses(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-               OGRGeometry* ogr2) {
-    return AppendBoolean(builder, ogr1->Crosses(ogr2) != 0);
+
+  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> &item){
+    return AppendBoolean(builder, item.item_value);
   };
-  auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-                    OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
-  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+
+  auto op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+               OGRGeometry* ogr2) {
+    item.item_value = ogr1->Crosses(ogr2) != 0;
+  };
+
+  auto null_op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { item.item_value = false; };
+
+  return BinaryOp<arrow::BooleanBuilder, bool>(geo1, geo2, op, null_op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Contains(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-               OGRGeometry* ogr2) {
-    return AppendBoolean(builder, ogr1->Contains(ogr2) != 0);
+
+  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> &item){
+    return AppendBoolean(builder, item.item_value);
   };
-  auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-                    OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
-  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+
+  auto op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+               OGRGeometry* ogr2) {
+    item.item_value = ogr1->Contains(ogr2) != 0;
+  };
+
+  auto null_op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { item.item_value = false; };
+
+  return BinaryOp<arrow::BooleanBuilder, bool>(geo1, geo2, op, null_op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Intersects(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-               OGRGeometry* ogr2) {
-    return AppendBoolean(builder, ogr1->Intersects(ogr2) != 0);
+
+  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> &item){
+    return AppendBoolean(builder, item.item_value);
   };
-  auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-                    OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
-  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+
+  auto op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+               OGRGeometry* ogr2) {
+    item.item_value = ogr1->Intersects(ogr2) != 0;
+  };
+
+  auto null_op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { item.item_value = false; };
+
+  return BinaryOp<arrow::BooleanBuilder, bool>(geo1, geo2, op, null_op, append_op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Within(
     const std::vector<std::shared_ptr<arrow::Array>>& geo1,
     const std::vector<std::shared_ptr<arrow::Array>>& geo2) {
-  auto op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
+  
+  auto append_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, ArrayValue<bool> &item){
+      return AppendBoolean(builder, item.item_value);
+  };
+
+  auto op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
                OGRGeometry* ogr2) {
     bool flag = true;
-    std::shared_ptr<arrow::Array> ret_ptr = nullptr;
+    bool result = false;
     do {
       /*
        * speed up for point within circle
@@ -1294,16 +1363,20 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Within(
       auto l_x = p0_x - p1_x;
       auto l_y = p0_y - p1_y;
       auto ll = l_x * l_x + l_y * l_y;
-      ret_ptr = AppendBoolean(builder, dd <= ll);
+      result = dd <= ll;
 
       flag = false;
     } while (0);
-    if (flag) ret_ptr = AppendBoolean(builder, ogr1->Within(ogr2) != 0);
-    return ret_ptr;
+
+    if (flag) result = ogr1->Within(ogr2) != 0;
+
+    item.item_value = result;
   };
-  auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
-                    OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
-  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+
+  auto null_op = [](ArrayValue<bool> &item, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { item.item_value = false; };
+
+  return BinaryOp<arrow::BooleanBuilder, bool>(geo1, geo2, op, null_op, append_op);
 }
 
 /*********************** AGGREGATE FUNCTIONS ***************************/

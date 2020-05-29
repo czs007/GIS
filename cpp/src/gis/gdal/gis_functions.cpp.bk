@@ -683,8 +683,8 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Buffer(
 
 std::shared_ptr<arrow::Array> ST_PrecisionReduce(
     const std::shared_ptr<arrow::Array>& geometries, int32_t precision) {
-  auto precision_reduce_visitor = new PrecisionReduceVisitor(precision);
-  auto op = [&precision_reduce_visitor](arrow::BinaryBuilder& builder, OGRGeometry* geo) {
+    auto precision_reduce_visitor = new PrecisionReduceVisitor(precision);
+    auto op = [&precision_reduce_visitor](arrow::BinaryBuilder& builder, OGRGeometry* geo) {
     geo->accept(precision_reduce_visitor);
     AppendWkbNDR(builder, geo);
   };
