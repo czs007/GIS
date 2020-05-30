@@ -298,6 +298,7 @@ bool GetNextValue(std::vector<std::vector<std::shared_ptr<arrow::Array>>>& array
 template <typename T, typename A>
 typename std::enable_if<std::is_base_of<arrow::ArrayBuilder, T>::value,
                         std::shared_ptr<typename arrow::Array>>::type
+
 UnaryOp(const std::shared_ptr<arrow::Array>& array,
         std::function<A(T&, OGRGeometry*)> op) {
   auto wkb = std::static_pointer_cast<arrow::BinaryArray>(array);

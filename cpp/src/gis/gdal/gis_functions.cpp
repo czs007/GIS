@@ -19,6 +19,7 @@
 #include <omp.h>
 #include <ogr_api.h>
 #include <ogrsf_frmts.h>
+#include <chrono>
 
 #include <functional>
 #include <iomanip>
@@ -362,6 +363,31 @@ bool GetNextValue(std::vector<std::vector<std::shared_ptr<arrow::Array>>>& array
   return ret_val;
 }
 
+void split_indexs(int total, int part, std::vector<std::pair<int, int>> & indexs);
+
+void split_indexs(int total, int part, std::vector<std::pair<int, int>> & indexs){
+	int reminder = total % part;
+	int quote = total / part;
+	
+
+	int part1 = reminder;
+	int quote1 = quote + 1;
+	int part2 = part - reminder;
+	int quote2 = quote;
+
+	for( int i = 0; i < part1 ; i++ ) { 
+		int start = i * quote1; 
+		int end = ( i + 1 ) * quote1 - 1; 
+		indexs.push_back(std::make_pair(start, end));
+	}
+	int offset = part1 * quote1;
+	for (int i = 0; i < part2; ++i){
+		int start = i * quote2 + offset; 
+		int end = ( i + 1 ) * quote2 - 1 + offset; 
+		indexs.push_back(std::make_pair(start, end));
+	}
+}
+
 template <typename T, typename A>
 typename std::enable_if<std::is_base_of<arrow::ArrayBuilder, T>::value,
                         std::shared_ptr<typename arrow::Array>>::type
@@ -375,8 +401,37 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
   T builder;
 
   std::vector<ArrayValue<A>> array_values(len);
+  //omp_set_dynamic(0); 
+  int parallelism = get_parallelism();
+  omp_set_num_threads(parallelism);
 
-  #pragma omp parallel for
+//  std::vector<std::pair<int, int>> indexs; 
+//  split_indexs(len, parallelism, indexs);
+
+  /*
+  #pragma omp parallel for num_threads(parallelism)
+  for (int i = 0; i <parallelism; ++i){
+	int start = indexs[i].first;
+	int end = indexs[i].second;
+	for (int j = start; j<= end; ++j){
+	auto geo = Wrapper_createFromWkb(wkb, j);
+    	auto & item = array_values[j];
+    	bool keep_geo = false;
+	    if (geo == nullptr) {
+	      item.is_null = true;
+	    } else {
+	      keep_geo = op(item, geo);
+	    }
+	    if (! keep_geo){
+	       OGRGeometryFactory::destroyGeometry(geo);
+	    }
+
+	}
+
+  }
+  */
+
+  #pragma omp parallel for num_threads(parallelism)
   for (int i = 0; i < len; ++i) {
     auto geo = Wrapper_createFromWkb(wkb, i);
     auto & item = array_values[i];
@@ -420,7 +475,11 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
   std::vector<std::shared_ptr<arrow::Array>> result_array;
   std::vector<ArrayValue<A>> array_values(len);
 
-  #pragma omp parallel for
+  omp_set_dynamic(0); 
+  int parallelism = get_parallelism();
+  omp_set_num_threads(parallelism);
+
+  #pragma omp parallel for num_threads(parallelism)
   for (int i = 0; i < len; ++i) {
     auto geo = Wrapper_createFromWkb(wkb, i);
     bool keep_geo = false;
@@ -430,9 +489,11 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
     } else {
         op(item, geo);
     }
+    
     if (! keep_geo){
         OGRGeometryFactory::destroyGeometry(geo);
     }
+    
   }
 
   if (append_op) {
@@ -480,7 +541,11 @@ BinaryOp(const std::vector<std::shared_ptr<typename arrow::Array>>& geo1,
 
   std::vector<ArrayValue<A>> array_values(total_geo);
 
-  #pragma omp parallel for
+  omp_set_dynamic(0); 
+  int parallelism = get_parallelism();
+  omp_set_num_threads(parallelism);
+
+  #pragma omp parallel for num_threads(parallelism)
   for (int i = 0; i < total_geo; ++i){
 	ChunkArrayIdx<WkbItem> idx0;
 	ChunkArrayIdx<WkbItem> idx1;
@@ -688,6 +753,8 @@ std::vector<std::shared_ptr<arrow::Array>> ST_AsGeoJSON(
 /************************* GEOMETRY ACCESSOR **************************/
 std::shared_ptr<arrow::Array> ST_IsValid(const std::shared_ptr<arrow::Array>& array) {
 
+    auto start = std::chrono::high_resolution_clock::now();
+
   auto append_op = [](arrow::BooleanBuilder& builder, ArrayValue<bool>& item) {
 	builder.Append(item.item_value);
   };
@@ -696,8 +763,15 @@ std::shared_ptr<arrow::Array> ST_IsValid(const std::shared_ptr<arrow::Array>& ar
     value.item_value = geo->IsValid() != 0;
     return false;
   };
+  auto result = UnaryOp<arrow::BooleanBuilder, bool>(array, op, append_op);
+//  return UnaryOp<arrow::BooleanBuilder, bool>(array, op, append_op);
 
-  return UnaryOp<arrow::BooleanBuilder, bool>(array, op, append_op);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count();
+  std::cout <<  "cost"
+     << double(duration) * std::chrono::microseconds::period::num / std::chrono::microseconds::period::den
+     << "s" << std::endl;
+   return result;
 }
 
 std::shared_ptr<arrow::Array> ST_GeometryType(

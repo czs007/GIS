@@ -115,11 +115,16 @@ def arctern_caller(func, *func_args):
             num_chunks = len(arg.chunks)
             break
 
+    import time
+    print("number of chunks", num_chunks)
     if num_chunks <= 1:
         result = func(*func_args)
-        return result.to_pandas()
+        ret = result.to_pandas()
+        return ret
 
     result_total = None
+    chunk_durations = []
+    chunk_append_durations = []
     for chunk_idx in range(num_chunks):
         args = []
         for arg in func_args:
@@ -128,11 +133,19 @@ def arctern_caller(func, *func_args):
                 args.append(arg.chunks[chunk_idx])
             else:
                 args.append(arg)
+        step_start = time.time()
         result = func(*args)
+        step_end = time.time()
+        chunk_durations.append(step_end - step_start)
+        step_start = time.time()
         if result_total is None:
             result_total = result.to_pandas()
         else:
             result_total = result_total.append(result.to_pandas(), ignore_index=True)
+        step_end = time.time()
+        chunk_append_durations.append(step_end - step_start)
+    print("chunk_durations", chunk_durations)
+    print("chunk_append_durations", chunk_append_durations)
     return result_total
 
 
@@ -357,8 +370,16 @@ def ST_IsValid(geos):
           dtype: bool
     """
     import pyarrow as pa
+    import time
+    step1_start = time.time()
     arr_geos = pa.array(geos, type='binary')
-    return arctern_caller(arctern_core_.ST_IsValid, arr_geos)
+    step1_end = time.time()
+    print("dur of step1", step1_end - step1_start)
+    step2_start = time.time()
+    ret = arctern_caller(arctern_core_.ST_IsValid, arr_geos)
+    step2_end = time.time()
+    print("dur of step2", step2_end - step2_start)
+    return ret
 
 
 @arctern_udf('binary', '')

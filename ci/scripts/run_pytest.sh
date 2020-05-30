@@ -44,6 +44,8 @@ done
 if [[ -n ${CONDA_ENV} ]]; then
     eval "$(conda shell.bash hook)"
     conda activate ${CONDA_ENV}
+
+    conda istall 'yml_path'
 fi
 
 pushd "${PYTHON_SRC_DIR}"
