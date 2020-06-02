@@ -116,7 +116,6 @@ def arctern_caller(func, *func_args):
             break
 
     import time
-    print("number of chunks", num_chunks)
     if num_chunks <= 1:
         result = func(*func_args)
         ret = result.to_pandas()
@@ -144,8 +143,6 @@ def arctern_caller(func, *func_args):
             result_total = result_total.append(result.to_pandas(), ignore_index=True)
         step_end = time.time()
         chunk_append_durations.append(step_end - step_start)
-    print("chunk_durations", chunk_durations)
-    print("chunk_append_durations", chunk_append_durations)
     return result_total
 
 
@@ -371,14 +368,8 @@ def ST_IsValid(geos):
     """
     import pyarrow as pa
     import time
-    step1_start = time.time()
     arr_geos = pa.array(geos, type='binary')
-    step1_end = time.time()
-    print("dur of step1", step1_end - step1_start)
-    step2_start = time.time()
     ret = arctern_caller(arctern_core_.ST_IsValid, arr_geos)
-    step2_end = time.time()
-    print("dur of step2", step2_end - step2_start)
     return ret
 
 
