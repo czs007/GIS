@@ -768,9 +768,11 @@ std::shared_ptr<arrow::Array> ST_IsValid(const std::shared_ptr<arrow::Array>& ar
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count();
+#if 0
   std::cout <<  "cost"
      << double(duration) * std::chrono::microseconds::period::num / std::chrono::microseconds::period::den
      << "s" << std::endl;
+#endif
    return result;
 }
 
