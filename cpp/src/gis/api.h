@@ -136,6 +136,13 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Equals(
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_1,
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_2);
 
+std::shared_ptr<arrow::ChunkedArray> ST_Disjoint(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_2);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Boundary(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries);
+
 std::vector<std::shared_ptr<arrow::Array>> ST_Touches(
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_1,
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_2);
@@ -177,6 +184,9 @@ std::vector<std::shared_ptr<arrow::Array>> ST_IndexedWithin(
     const std::vector<std::shared_ptr<arrow::Array>>& polygons);
 
 std::string GIS_Version();
+
+void set_parallelism(int parallelism);
+int get_parallelism();
 
 }  // namespace gis
 }  // namespace arctern

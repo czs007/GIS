@@ -172,7 +172,7 @@ std::vector<std::shared_ptr<arrow::Array>> ST_CurveToLine(
 std::shared_ptr<arrow::ChunkedArray> ST_SymDifference(
     const std::shared_ptr<arrow::ChunkedArray>& geo1,
     const std::shared_ptr<arrow::ChunkedArray>& geo2) {
-  return gdal::ST_SymDifference(geo1,geo2);
+  return gdal::ST_SymDifference(geo1, geo2);
 }
 
 std::shared_ptr<arrow::ChunkedArray> ST_Difference(
@@ -287,6 +287,16 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Equals(
 #endif
 }
 
+std::shared_ptr<arrow::ChunkedArray> ST_Disjoint(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_2) {
+  return gdal::ST_Disjoint(geometries_1, geometries_2);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Boundary(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries) {
+  return gdal::ST_Boundary(geometries);
+}
 std::vector<std::shared_ptr<arrow::Array>> ST_Touches(
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_1,
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_2) {
@@ -386,6 +396,10 @@ std::string GIS_Version() {
                            "commit id : " + LAST_COMMIT_ID + "\n";
   return info;
 }
+
+void set_parallelism(int parallelism) { gdal::set_parallelism(parallelism); }
+
+int get_parallelism() { return gdal::get_parallelism(); }
 
 }  // namespace gis
 }  // namespace arctern

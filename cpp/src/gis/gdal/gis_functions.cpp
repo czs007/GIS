@@ -18,6 +18,7 @@
 
 #include <ogr_api.h>
 #include <ogrsf_frmts.h>
+#include <omp.h>
 
 #include <functional>
 #include <iomanip>
@@ -31,12 +32,19 @@
 #include "gis/gdal/arctern_geos.h"
 #include "gis/gdal/geometry_visitor.h"
 #include "gis/parser.h"
-#include "utils/check_status.h"
 #include "utils/arrow_utils.h"
+#include "utils/check_status.h"
 
 namespace arctern {
 namespace gis {
 namespace gdal {
+
+constexpr int chunk_ratio = 10;
+constexpr int parallel_threshold =
+    10000;  // won't spawn multi threads unless number of lines exceed parallel_threshold.
+
+static int omp_parallelism = 0;
+static int num_of_procs = 0;
 
 // inline void* Wrapper_OGR_G_Centroid(void* geo) {
 //   void* centroid = new OGRPoint();
@@ -221,6 +229,24 @@ inline std::shared_ptr<arrow::Array> AppendWkb(
   return array_ptr;
 }
 
+inline void AppendWkb(arrow::BinaryBuilder& builder, const OGRGeometry* geo) {
+  if (geo == nullptr) {
+    CHECK_ARROW(builder.AppendNull());
+  } else if (geo->IsEmpty() && (geo->getGeometryType() == wkbPoint)) {
+    CHECK_ARROW(builder.AppendNull());
+  } else {
+    auto wkb_size = geo->WkbSize();
+    auto wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
+    auto err_code = geo->exportToWkb(OGRwkbByteOrder::wkbNDR, wkb);
+    if (err_code != OGRERR_NONE) {
+      CHECK_ARROW(builder.AppendNull());
+    } else {
+      CHECK_ARROW(builder.Append(wkb, wkb_size));
+    }
+    CPLFree(wkb);
+  }
+}
+
 bool GetNextValue(const std::vector<std::shared_ptr<arrow::Array>>& chunk_array,
                   ChunkArrayIdx<WkbItem>& idx) {
   if (idx.chunk_idx >= (int)chunk_array.size()) return false;
@@ -289,24 +315,39 @@ bool GetNextValue(std::vector<std::vector<std::shared_ptr<arrow::Array>>>& array
 template <typename T>
 typename std::enable_if<std::is_base_of<arrow::ArrayBuilder, T>::value,
                         std::shared_ptr<typename arrow::ChunkedArray>>::type
-UnaryOp1(const std::shared_ptr<arrow::ChunkedArray>& chunked_array,
+UnaryOp(const std::shared_ptr<typename arrow::ChunkedArray>& array,
         std::function<void(T&, OGRGeometry*)> op) {
-  T builder;
-  for (int32_t i = 0; i < chunked_array->num_chunks(); i++) {
-    auto wkb = std::static_pointer_cast<arrow::BinaryArray>(chunked_array->chunk(i));
-    for (int32_t j = 0; j < wkb->length(); j++) {
-      auto geo = Wrapper_createFromWkb(wkb, i);
-    if (geo == nullptr) {
-      builder.AppendNull();
-    } else {
-      op(builder, geo);
+  auto total_lines = array->length();
+  auto parallelism = total_lines >= parallel_threshold ? get_parallelism() : 1;
+  auto expect_num_chunks = parallelism == 1 ? 1 : parallelism * chunk_ratio;
+  auto max_chunk_size = total_lines / expect_num_chunks;
+
+  std::vector<ChunkedArrayPtr> chunked_arrays{array};
+  auto align_goes = arctern::AlignChunkedArray(chunked_arrays, max_chunk_size);
+  auto num_chunks = align_goes[0]->num_chunks();
+  arrow::ArrayVector result_arrays(num_chunks);
+
+  omp_set_num_threads(parallelism);
+  omp_set_dynamic(0);
+
+#pragma omp parallel for num_threads(parallelism)
+  for (int32_t i = 0; num_chunks > i; ++i) {
+    T builder;
+    auto binary_geo_chunk =
+        std::static_pointer_cast<arrow::BinaryArray>(align_goes[0]->chunk(i));
+    for (int32_t j = 0; j < binary_geo_chunk->length(); ++j) {
+      auto geo = Wrapper_createFromWkb(binary_geo_chunk, j);
+      if (geo == nullptr) {
+        builder.AppendNull();
+      } else {
+        op(builder, geo);
+      }
+      OGRGeometryFactory::destroyGeometry(geo);
     }
-    OGRGeometryFactory::destroyGeometry(geo);
-    }
+    CHECK_ARROW(builder.Finish(&result_arrays[i]));
   }
-  std::shared_ptr<arrow::Array> array;
-  builder.Finish(&array);
-  return std::make_shared<arrow::ChunkedArray>(array);
+  auto results = std::make_shared<arrow::ChunkedArray>(result_arrays);
+  return results;
 }
 
 template <typename T>
@@ -392,28 +433,36 @@ UnaryOp(const std::shared_ptr<arrow::Array>& array,
 //   return results;
 // }
 
-
 template <typename T>
 typename std::enable_if<std::is_base_of<arrow::ArrayBuilder, T>::value,
                         std::shared_ptr<typename arrow::ChunkedArray>>::type
-BinaryOp1(const std::shared_ptr<typename arrow::ChunkedArray>& geo1,
-          const std::shared_ptr<typename arrow::ChunkedArray>& geo2,
-          std::function<void (T&,OGRGeometry*, OGRGeometry*)> op,
-          std::function<std::shared_ptr<typename arrow::Array>(T&,
-                                                               OGRGeometry*, OGRGeometry*)>
-          null_op = nullptr) {
-  std::vector<ChunkedArrayPtr> chunked_arrays;
-  chunked_arrays.push_back(geo1);
-  chunked_arrays.push_back(geo2);
+BinaryOp(const std::shared_ptr<typename arrow::ChunkedArray>& geo1,
+         const std::shared_ptr<typename arrow::ChunkedArray>& geo2,
+         std::function<void(T&, OGRGeometry*, OGRGeometry*)> op,
+         std::function<void(T&, OGRGeometry*, OGRGeometry*)> null_op = nullptr) {
+  auto total_lines = geo1->length();
+  int parallelism = total_lines >= parallel_threshold ? get_parallelism() : 1;
+  int expect_num_chunks = parallelism == 1 ? 1 : parallelism * chunk_ratio;
 
-  auto align_goes = arctern::AlignChunkedArray(chunked_arrays);
-  T builder;
+  std::size_t max_chunk_size = total_lines / expect_num_chunks;
 
-  for (int32_t i = 0; i < align_goes[0]->num_chunks(); i++) {
-    auto binary_geo1_chunk = 
-                      std::static_pointer_cast<arrow::BinaryArray>(align_goes[0]->chunk(i));
-    auto binary_geo2_chunk = 
-                      std::static_pointer_cast<arrow::BinaryArray>(align_goes[1]->chunk(i));
+  std::vector<ChunkedArrayPtr> chunked_arrays{geo1, geo2};
+  auto align_goes = arctern::AlignChunkedArray(chunked_arrays, max_chunk_size);
+
+  auto num_chunks = align_goes[0]->num_chunks();
+
+  arrow::ArrayVector result_arrays(num_chunks);
+
+  omp_set_num_threads(parallelism);
+  omp_set_dynamic(0);
+#pragma omp parallel for num_threads(parallelism)
+  for (int32_t i = 0; i < num_chunks; i++) {
+    T builder;
+    auto binary_geo1_chunk =
+        std::static_pointer_cast<arrow::BinaryArray>(align_goes[0]->chunk(i));
+    auto binary_geo2_chunk =
+        std::static_pointer_cast<arrow::BinaryArray>(align_goes[1]->chunk(i));
+
     for (int32_t j = 0; j < binary_geo1_chunk->length(); j++) {
       auto ogr1 = Wrapper_createFromWkb(binary_geo1_chunk, j);
       auto ogr2 = Wrapper_createFromWkb(binary_geo2_chunk, j);
@@ -431,10 +480,10 @@ BinaryOp1(const std::shared_ptr<typename arrow::ChunkedArray>& geo1,
       OGRGeometryFactory::destroyGeometry(ogr1);
       OGRGeometryFactory::destroyGeometry(ogr2);
     }
+    CHECK_ARROW(builder.Finish(&result_arrays[i]));
   }
-  std::shared_ptr<arrow::Array> array;
-  builder.Finish(&array);
-  return std::make_shared<arrow::ChunkedArray>(array);
+
+  return std::make_shared<arrow::ChunkedArray>(result_arrays);
 }
 
 template <typename T>
@@ -914,7 +963,7 @@ std::shared_ptr<arrow::ChunkedArray> ST_SymDifference(
       builder.AppendNull();
     } else {
       auto rst = ogr1->SymDifference(ogr2);
-      auto rst_wkb_size =rst->WkbSize();
+      auto rst_wkb_size = rst->WkbSize();
       auto wkb = static_cast<unsigned char*>(CPLMalloc(rst_wkb_size));
       auto err_code = rst->exportToWkb(OGRwkbByteOrder::wkbNDR, wkb);
       if (err_code != OGRERR_NONE) {
@@ -926,7 +975,7 @@ std::shared_ptr<arrow::ChunkedArray> ST_SymDifference(
     }
   };
 
-  return BinaryOp1<arrow::BinaryBuilder>(geo1,geo2,op);
+  return BinaryOp<arrow::BinaryBuilder>(geo1,geo2,op);
 }
 
 std::shared_ptr<arrow::ChunkedArray> ST_Difference(
@@ -949,7 +998,7 @@ std::shared_ptr<arrow::ChunkedArray> ST_Difference(
     }
   };
 
-  return BinaryOp1<arrow::BinaryBuilder>(geo1,geo2,op);
+  return BinaryOp<arrow::BinaryBuilder>(geo1,geo2,op);
 }
 
 std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
@@ -960,13 +1009,18 @@ std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
       builder.AppendNull();
     } else {
       auto polygon_geo = dynamic_cast<OGRPolygon*>(ogr);
+      std::cout << "ddddddd" << std::endl;
       auto rst = polygon_geo->getExteriorRing();
+      std::cout << "ccccc" << std::endl;
       char* str;
-      OGR_G_ExportToWkt(rst,&str);
+      OGR_G_ExportToWkt(rst, &str);
       std::cout << rst->getGeometryName() << ":" << str << std::endl;
       auto rst_wkb_size = rst->WkbSize();
       auto wkb = static_cast<unsigned char *>(CPLMalloc(rst_wkb_size));
-      auto err_code = rst->exportToWkb(OGRwkbByteOrder::wkbNDR, wkb);
+      auto err_code = OGR_G_ExportToWkb(rst, OGRwkbByteOrder::wkbNDR, wkb);
+//      OGRGeometry* abc = nullptr;
+//      OGRGeometryFactory::createFromWkb(wkb, nullptr, &abc);
+//      std::cout << abc->getGeometryName() << std::endl;
       if (err_code != OGRERR_NONE) {
         builder.AppendNull();
       } else {
@@ -976,7 +1030,7 @@ std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
     }
   };
 
-  return UnaryOp1<arrow::BinaryBuilder>(geometries,op);
+  return UnaryOp<arrow::BinaryBuilder>(geometries,op);
 }
 
 /************************ MEASUREMENT FUNCTIONS ************************/
@@ -1122,6 +1176,35 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Equals(
   auto null_op = [](ChunkArrayBuilder<arrow::BooleanBuilder>& builder, OGRGeometry* ogr1,
                     OGRGeometry* ogr2) { return AppendBoolean(builder, false); };
   return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Disjoint(
+    const std::shared_ptr<arrow::ChunkedArray>& geo1,
+    const std::shared_ptr<arrow::ChunkedArray>& geo2) {
+  auto op = [](arrow::BooleanBuilder& builder, OGRGeometry* ogr1, OGRGeometry* ogr2) {
+    if (ogr1->IsEmpty() || ogr2->IsEmpty()) {
+      CHECK_ARROW(builder.Append(true));
+    } else if (ogr1->Disjoint(ogr2)) {
+      CHECK_ARROW(builder.Append(true));
+    } else {
+      CHECK_ARROW(builder.Append(false));
+    }
+  };
+  auto null_op = [](arrow::BooleanBuilder& builder, OGRGeometry* ogr1,
+                    OGRGeometry* ogr2) { CHECK_ARROW(builder.Append(false)); };
+  return BinaryOp<arrow::BooleanBuilder>(geo1, geo2, op, null_op);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Boundary(
+    const std::shared_ptr<arrow::ChunkedArray>& geo) {
+  auto op = [](arrow::BinaryBuilder& builder, OGRGeometry* ogr) {
+    if (ogr->IsEmpty()) {
+      AppendWkb(builder, ogr);
+    } else {
+      AppendWkb(builder, ogr->Boundary());
+    }
+  };
+  return UnaryOp<arrow::BinaryBuilder>(geo, op);
 }
 
 std::vector<std::shared_ptr<arrow::Array>> ST_Touches(
@@ -1436,6 +1519,22 @@ std::shared_ptr<arrow::Array> ST_Envelope_Aggr(
   std::shared_ptr<arrow::Array> results;
   CHECK_ARROW(builder.Finish(&results));
   return results;
+}
+
+void set_parallelism(int parallelism) {
+  if (parallelism >= 0) {
+    omp_parallelism = parallelism;
+  }
+}
+
+int get_parallelism() {
+  if (omp_parallelism) {
+    return omp_parallelism;
+  }
+  if (0 == num_of_procs) {
+    num_of_procs = omp_get_num_procs();
+  }
+  return num_of_procs;
 }
 
 }  // namespace gdal

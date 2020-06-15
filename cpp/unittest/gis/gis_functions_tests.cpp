@@ -23,8 +23,8 @@
 #include <iostream>
 
 #include "arrow/gis_api.h"
-#include "utils/check_status.h"
 #include "map_match/map_match.h"
+#include "utils/check_status.h"
 
 #define COMMON_TEST_CASES                                                              \
   auto p1 = "POINT (0 1)";                                                             \
@@ -3902,8 +3902,10 @@ TEST(geometry_test, test_st_symdifference) {
   OGR_G_ExportToWkb(geo1, OGRwkbByteOrder::wkbNDR, geo1_wkb);
   arrow::BinaryBuilder builder;
   std::shared_ptr<arrow::Array> geo1_array;
-  for (int32_t i = 0; i < 400001; i++) {
-    builder.Append(geo1_wkb,wkb_size);
+  
+  int32_t  rows = 10000;
+  for (int32_t i = 0; i < rows; i++) {
+    builder.Append(geo1_wkb, wkb_size);
   }
   builder.Finish(&geo1_array);
 
@@ -3911,8 +3913,8 @@ TEST(geometry_test, test_st_symdifference) {
   auto geo2_wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
   OGR_G_ExportToWkb(geo2, OGRwkbByteOrder::wkbNDR, geo2_wkb);
   std::shared_ptr<arrow::Array> geo2_array;
-  for (int32_t i = 0; i < 400001; i++) {
-    builder.Append(geo2_wkb,wkb_size);
+  for (int32_t i = 0; i < rows; i++) {
+    builder.Append(geo2_wkb, wkb_size);
   }
   builder.Finish(&geo2_array);
 
@@ -3925,8 +3927,7 @@ TEST(geometry_test, test_st_symdifference) {
   auto geo1_chunked = std::make_shared<arrow::ChunkedArray>(geo1_arrays);
   auto geo2_chunked = std::make_shared<arrow::ChunkedArray>(geo2_arrays);
 
-  auto result = arctern::gis::ST_SymDifference(geo1_chunked,geo2_chunked);
-
+  auto result = arctern::gis::ST_SymDifference(geo1_chunked, geo2_chunked);
 
   for (int32_t i = 0; i < result->num_chunks(); i++) {
     auto binary_geos = std::static_pointer_cast<arrow::BinaryArray>(result->chunk(i));
@@ -4015,7 +4016,6 @@ TEST(geometry_test, test_st_exteriorring) {
   arrow::ArrayVector geo_arrays;
   geo_arrays.push_back(geo_array);
 
-
   auto geo_chunked = std::make_shared<arrow::ChunkedArray>(geo_arrays);
   auto result = arctern::gis::ST_ExteriorRing(geo_chunked);
 
@@ -4033,6 +4033,6 @@ TEST(geometry_test, test_st_exteriorring) {
       OGRGeometryFactory::destroyGeometry(result_geo);
     }
   }
-
+  std::cout << "xxxxx" << std::endl;
   OGRGeometryFactory::destroyGeometry(geo);
 }
