@@ -3902,7 +3902,7 @@ TEST(geometry_test, test_st_symdifference) {
   OGR_G_ExportToWkb(geo1, OGRwkbByteOrder::wkbNDR, geo1_wkb);
   arrow::BinaryBuilder builder;
   std::shared_ptr<arrow::Array> geo1_array;
-  for (int32_t i = 0; i < 4; i++) {
+  for (int32_t i = 0; i < 400001; i++) {
     builder.Append(geo1_wkb,wkb_size);
   }
   builder.Finish(&geo1_array);
@@ -3911,7 +3911,7 @@ TEST(geometry_test, test_st_symdifference) {
   auto geo2_wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
   OGR_G_ExportToWkb(geo2, OGRwkbByteOrder::wkbNDR, geo2_wkb);
   std::shared_ptr<arrow::Array> geo2_array;
-  for (int32_t i = 0; i < 4; i++) {
+  for (int32_t i = 0; i < 400001; i++) {
     builder.Append(geo2_wkb,wkb_size);
   }
   builder.Finish(&geo2_array);
@@ -3942,4 +3942,97 @@ TEST(geometry_test, test_st_symdifference) {
   }
   OGRGeometryFactory::destroyGeometry(geo1);
   OGRGeometryFactory::destroyGeometry(geo2);
+}
+
+TEST(geometry_test, test_st_difference) {
+  std::string str1 = "LINESTRING (0 0,5 0)";
+  std::string str2 = "LINESTRING (4 0,6 0)";
+  OGRGeometry* geo1 = nullptr;
+  OGRGeometry* geo2 = nullptr;
+  OGRGeometryFactory::createFromWkt(str1.c_str(), nullptr, &geo1);
+  OGRGeometryFactory::createFromWkt(str2.c_str(), nullptr, &geo2);
+  auto wkb_size = geo1->WkbSize();
+  auto geo1_wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
+  OGR_G_ExportToWkb(geo1, OGRwkbByteOrder::wkbNDR, geo1_wkb);
+  arrow::BinaryBuilder builder;
+  std::shared_ptr<arrow::Array> geo1_array;
+  for (int32_t i = 0; i < 400001; i++) {
+    builder.Append(geo1_wkb,wkb_size);
+  }
+  builder.Finish(&geo1_array);
+
+  wkb_size = geo2->WkbSize();
+  auto geo2_wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
+  OGR_G_ExportToWkb(geo2, OGRwkbByteOrder::wkbNDR, geo2_wkb);
+  std::shared_ptr<arrow::Array> geo2_array;
+  for (int32_t i = 0; i < 400001; i++) {
+    builder.Append(geo2_wkb,wkb_size);
+  }
+  builder.Finish(&geo2_array);
+
+  arrow::ArrayVector geo1_arrays;
+  geo1_arrays.push_back(geo1_array);
+
+  arrow::ArrayVector geo2_arrays;
+  geo2_arrays.push_back(geo2_array);
+
+  auto geo1_chunked = std::make_shared<arrow::ChunkedArray>(geo1_arrays);
+  auto geo2_chunked = std::make_shared<arrow::ChunkedArray>(geo2_arrays);
+
+  auto result = arctern::gis::ST_Difference(geo1_chunked,geo2_chunked);
+
+
+  for (int32_t i = 0; i < result->num_chunks(); i++) {
+    auto binary_geos = std::static_pointer_cast<arrow::BinaryArray>(result->chunk(i));
+    for (int32_t j = 0; j < result->chunk(i)->length(); j++) {
+      auto data_ptr = binary_geos->GetString(j);
+      OGRGeometry* geo = nullptr;
+      OGRGeometryFactory::createFromWkb(data_ptr.c_str(), nullptr, &geo);
+      char* str;
+      OGR_G_ExportToWkt(geo, &str);
+      assert(std::string(str) == "LINESTRING (0 0,4 0)");
+      OGRGeometryFactory::destroyGeometry(geo);
+    }
+  }
+
+  OGRGeometryFactory::destroyGeometry(geo1);
+  OGRGeometryFactory::destroyGeometry(geo2);
+}
+
+TEST(geometry_test, test_st_exteriorring) {
+  std::string str = "POLYGON ((0 0,1 0,1 1,0 1,0 0))";
+  OGRGeometry* geo = nullptr;
+  OGRGeometryFactory::createFromWkt(str.c_str(), nullptr, &geo);
+  auto wkb_size = geo->WkbSize();
+  auto geo_wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
+  OGR_G_ExportToWkb(geo, OGRwkbByteOrder::wkbNDR, geo_wkb);
+  arrow::BinaryBuilder builder;
+  std::shared_ptr<arrow::Array> geo_array;
+  for (int32_t i = 0; i < 4; i++) {
+    builder.Append(geo_wkb,wkb_size);
+  }
+  builder.Finish(&geo_array);
+  arrow::ArrayVector geo_arrays;
+  geo_arrays.push_back(geo_array);
+
+
+  auto geo_chunked = std::make_shared<arrow::ChunkedArray>(geo_arrays);
+  auto result = arctern::gis::ST_ExteriorRing(geo_chunked);
+
+
+  for (int32_t i = 0; i < result->num_chunks(); i++) {
+    auto binary_geos = std::static_pointer_cast<arrow::BinaryArray>(result->chunk(i));
+    for (int32_t j = 0; j < result->chunk(i)->length(); j++) {
+      auto data_ptr = binary_geos->GetString(j);
+      OGRGeometry* result_geo = nullptr;
+      OGRGeometryFactory::createFromWkb(data_ptr.c_str(), nullptr, &result_geo);
+      char* result_str;
+      OGR_G_ExportToWkt(result_geo, &result_str);
+      std::cout << str << std::endl;
+      // assert(std::string(str) == "LINESTRING (0 0,4 0)");
+      OGRGeometryFactory::destroyGeometry(result_geo);
+    }
+  }
+
+  OGRGeometryFactory::destroyGeometry(geo);
 }

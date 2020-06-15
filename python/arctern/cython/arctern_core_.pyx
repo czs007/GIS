@@ -338,6 +338,10 @@ def ST_SymDifference(object geo1,object geo2):
     result = arctern_core_pxd.ST_SymDifference(pyarrow_unwrap_chunked_array(geo1),pyarrow_unwrap_chunked_array(geo2))
     return pyarrow_wrap_chunked_array(result)
 
+def ST_Difference(object geo1,object geo2):
+    result = arctern_core_pxd.ST_Difference(pyarrow_unwrap_chunked_array(geo1),pyarrow_unwrap_chunked_array(geo2))
+    return pyarrow_wrap_chunked_array(result)
+
 def ST_NPoints(object geo_arr):
     return pyarrow_wrap_array(arctern_core_pxd.ST_NPoints(pyarrow_unwrap_array(geo_arr)))
 

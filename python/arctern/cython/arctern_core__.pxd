@@ -100,6 +100,9 @@ cdef extern from "gis.h" namespace "arctern::gis":
     shared_ptr[CChunkedArray] ST_SymDifference(const shared_ptr[CChunkedArray] &geo1, \
                                                const shared_ptr[CChunkedArray] &geo2) except +
 
+    shared_ptr[CChunkedArray] ST_Difference(const shared_ptr[CChunkedArray] &geo1, \
+                                               const shared_ptr[CChunkedArray] &geo2) except +
+
     shared_ptr[CArray] ST_NPoints(const shared_ptr[CArray] &geo_arr) except +
     shared_ptr[CArray] ST_Envelope(const shared_ptr[CArray] &geo_arr) except +
 
