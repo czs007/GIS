@@ -47,6 +47,13 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Equals(
     const std::vector<std::shared_ptr<arrow::Array>>& left_geometries,
     const std::vector<std::shared_ptr<arrow::Array>>& right_geometries);
 
+std::shared_ptr<arrow::ChunkedArray> ST_Disjoint(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_2);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Boundary(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries);
+
 std::vector<std::shared_ptr<arrow::Array>> ST_Touches(
     const std::vector<std::shared_ptr<arrow::Array>>& left_geometries,
     const std::vector<std::shared_ptr<arrow::Array>>& right_geometries);
@@ -121,6 +128,28 @@ std::shared_ptr<arrow::Array> ST_Transform(const std::shared_ptr<arrow::Array>& 
                                            const std::string& dst_rs);
 
 std::vector<std::shared_ptr<arrow::Array>> ST_CurveToLine(const std::shared_ptr<arrow::Array>& geos);
+
+std::shared_ptr<arrow::ChunkedArray> ST_SymDifference(
+    const std::shared_ptr<arrow::ChunkedArray>& geo1,
+    const std::shared_ptr<arrow::ChunkedArray>& geo2);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Difference(
+    const std::shared_ptr<arrow::ChunkedArray>& geo1,
+    const std::shared_ptr<arrow::ChunkedArray>& geo2);
+
+std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
+    const std::shared_ptr<arrow::ChunkedArray>& geos);
+
+std::shared_ptr<arrow::ChunkedArray> ST_IsEmpty(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Scale(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double factor_x, double factor_y);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Affine(
+  const std::shared_ptr<arrow::ChunkedArray>& geometries,
+  double a, double b, double d, double e, double offset_x, double offset_y);
 
 std::shared_ptr<arrow::Array> ST_NPoints(const std::shared_ptr<arrow::Array>& geo_arr);
 

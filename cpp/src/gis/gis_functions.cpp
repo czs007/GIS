@@ -169,6 +169,40 @@ std::vector<std::shared_ptr<arrow::Array>> ST_CurveToLine(
   return gdal::ST_CurveToLine(geometries);
 }
 
+std::shared_ptr<arrow::ChunkedArray> ST_SymDifference(
+    const std::shared_ptr<arrow::ChunkedArray>& geo1,
+    const std::shared_ptr<arrow::ChunkedArray>& geo2) {
+  return gdal::ST_SymDifference(geo1, geo2);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Difference(
+    const std::shared_ptr<arrow::ChunkedArray>& geo1,
+    const std::shared_ptr<arrow::ChunkedArray>& geo2) {
+  return gdal::ST_Difference(geo1,geo2);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries) {
+  return gdal::ST_ExteriorRing(geometries);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_IsEmpty(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries) {
+  return gdal::ST_IsEmpty(geometries);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Scale(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double factor_x, double factor_y) {
+  return gdal::ST_Scale(geometries,factor_x,factor_y);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Affine(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double a, double b, double d, double e, double offset_x, double offset_y) {
+  return gdal::ST_Affine(geometries, a, b, d, e, offset_x, offset_y);
+}
+
 /*************************** MEASUREMENT FUNCTIONS ***************************/
 
 std::vector<std::shared_ptr<arrow::Array>> ST_DistanceSphere(
@@ -270,6 +304,16 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Equals(
 #endif
 }
 
+std::shared_ptr<arrow::ChunkedArray> ST_Disjoint(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_2) {
+  return gdal::ST_Disjoint(geometries_1, geometries_2);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Boundary(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries) {
+  return gdal::ST_Boundary(geometries);
+}
 std::vector<std::shared_ptr<arrow::Array>> ST_Touches(
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_1,
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_2) {
@@ -369,6 +413,10 @@ std::string GIS_Version() {
                            "commit id : " + LAST_COMMIT_ID + "\n";
   return info;
 }
+
+void set_parallelism(int parallelism) { gdal::set_parallelism(parallelism); }
+
+int get_parallelism() { return gdal::get_parallelism(); }
 
 }  // namespace gis
 }  // namespace arctern

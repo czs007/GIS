@@ -493,6 +493,16 @@ def test_ST_Centroid():
     assert rst[0] == "POINT (0.5 0.5)"
     assert rst[1] == "POINT (4 4)"
 
+def test_ST_Boundary():
+    data = ["POINT (1 2)","LINESTRING (0 0,1 0,1 2,3 4)", "POLYGON((0 0,0 8,8 8,8 0,0 0))", "POLYGON EMPTY"]
+    data = pandas.Series(data)
+    rst = arctern.ST_AsText(arctern.ST_Boundary(arctern.ST_GeomFromText(data)))
+
+    assert len(rst) == 4
+    assert rst[0] == "GEOMETRYCOLLECTION EMPTY"
+    assert rst[1] == "MULTIPOINT (0 0,3 4)"
+    assert rst[2] == "LINESTRING (0 0,0 8,8 8,8 0,0 0)"
+    assert rst[3] == "POLYGON EMPTY"
 
 def test_ST_Length():
     data = ["LINESTRING(0 0,0 1)", "LINESTRING(1 1,1 4)"]
@@ -560,6 +570,52 @@ def test_ST_CurveToLine():
 
     assert str(rst[0]).startswith("POLYGON")
 
+def test_ST_SymDifference():
+    p1 = "LINESTRING (0 0,5 0)"
+    p2 = "LINESTRING (4 0,6 0)"
+    data1 = [p1]
+    data2 = [p2]
+    data1 = arctern.ST_GeomFromText(pandas.Series(data1))
+    data2 = arctern.ST_GeomFromText(pandas.Series(data2))
+    rst = arctern.ST_AsText(arctern.ST_SymDifference(data1, data2))
+    assert rst[0] == "MULTILINESTRING ((5 0,6 0),(0 0,4 0))"
+
+def test_ST_Difference():
+    p1 = "LINESTRING (0 0,5 0)"
+    p2 = "LINESTRING (4 0,6 0)"
+    data1 = [p1]
+    data2 = [p2]
+    data1 = arctern.ST_GeomFromText(pandas.Series(data1))
+    data2 = arctern.ST_GeomFromText(pandas.Series(data2))
+    rst = arctern.ST_AsText(arctern.ST_Difference(data1, data2))
+    assert rst[0] == "LINESTRING (0 0,4 0)"
+
+def test_ST_IsEmpty():
+    p1 = "LINESTRING (0 0,5 0)"
+    p2 = "LINESTRING EMPTY"
+    data = [p1, p2]
+    data = arctern.ST_GeomFromText(pandas.Series(data))
+    rst = arctern.ST_IsEmpty(data)
+    assert rst[0] == 0
+    assert rst[1] == 1
+
+def test_ST_Scale():
+    p1 = "LINESTRING (1 2,2 4)"
+    p2 = "LINESTRING (4 0,6 0)"
+    data = [p1, p2]
+    data = arctern.ST_GeomFromText(pandas.Series(data))
+    rst = arctern.ST_AsText(arctern.ST_Scale(data, 2, 2))
+    assert rst[0] == "LINESTRING (2 4,4 8)"
+    assert rst[1] == "LINESTRING (8 0,12 0)"
+
+def test_ST_Affine():
+    p1 = "LINESTRING (1 2,2 4)"
+    p2 = "LINESTRING (4 0,6 0)"
+    data = [p1, p2]
+    data = arctern.ST_GeomFromText(pandas.Series(data))
+    rst = arctern.ST_AsText(arctern.ST_Affine(data, 2, 2, 2, 2, 2, 2))
+    assert rst[0] == "LINESTRING (2 4,4 8)"
+    assert rst[1] == "LINESTRING (8 0,12 0)"
 
 def test_ST_NPoints():
     data = ["LINESTRING(1 1,1 4)"]
@@ -610,6 +666,42 @@ def test_ST_PolygonFromEnvelope():
     rst = arctern.ST_AsText(arctern.ST_PolygonFromEnvelope(x_min, y_min, x_max, y_max))
 
     assert rst[0] == "POLYGON ((0 0,0 1,1 1,1 0,0 0))"
+
+def test_ST_Disjoint():
+    p11 = "POLYGON((0 0,1 0,1 1,0 1,0 0))"
+    p12 = "POLYGON((8 0,9 0,9 1,8 1,8 0))"
+    p13 = "LINESTRING(2 2,10 2)"
+    p14 = "LINESTRING(9 2,10 2)"
+    data1 = pandas.Series([p11, p12, p13, p14])
+
+    p21 = "POLYGON((0 0,0 8,8 8,8 0,0 0))"
+    p22 = "POLYGON((0 0,0 8,8 8,8 0,0 0))"
+    p23 = "POLYGON((0 0,0 8,8 8,8 0,0 0))"
+    p24 = "POLYGON((0 0,0 8,8 8,8 0,0 0))"
+    data2 = pandas.Series([p21, p22, p23, p24])
+
+    rst = arctern.ST_Disjoint(arctern.ST_GeomFromText(data2), arctern.ST_GeomFromText(data1))
+    assert rst[0] == 0
+    assert rst[1] == 0
+    assert rst[2] == 0
+    assert rst[3] == 1
+
+    # TODO : add this feather later
+    # rst = arctern.ST_Disjoint(arctern.ST_GeomFromText(data1),
+    #                             arctern.ST_GeomFromText("POLYGON((0 0,0 8,8 8,8 0,0 0))")[0])
+    # assert len(rst) == 4
+    # assert rst[0] == 0
+    # assert rst[1] == 0
+    # assert rst[2] == 0
+    # assert rst[3] == 1
+    #
+    # rst = arctern.ST_Disjoint(arctern.ST_GeomFromText("POLYGON((0 0,0 8,8 8,8 0,0 0))")[0],
+    #                             arctern.ST_GeomFromText(data1))
+    # assert len(rst) == 4
+    # assert rst[0] == 0
+    # assert rst[1] == 0
+    # assert rst[2] == 0
+    # assert rst[3] == 1
 
 
 def test_ST_Union_Aggr():

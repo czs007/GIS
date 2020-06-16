@@ -19,6 +19,8 @@ __all__ = [
     "ST_IsValid",
     "ST_PrecisionReduce",
     "ST_Equals",
+    "ST_Disjoint",
+    "ST_Boundary",
     "ST_Touches",
     "ST_Overlaps",
     "ST_Crosses",
@@ -44,6 +46,11 @@ __all__ = [
     "ST_Envelope_Aggr",
     "ST_Transform",
     "ST_CurveToLine",
+    "ST_SymDifference",
+    "ST_Difference",
+    "ST_IsEmpty",
+    "ST_Scale",
+    "ST_Affine",
     "ST_GeomFromGeoJSON",
     "ST_GeomFromText",
     "ST_AsText",
@@ -427,6 +434,24 @@ def ST_Equals(geo1, geo2):
     result = arctern_core_.ST_Equals(arr_geo1, arr_geo2)
     return _to_pandas_series(result)
 
+def ST_Disjoint(geo1, geo2):
+    import pyarrow as pa
+    arr_geo1 = pa.array(geo1, type='binary')
+    arr_geo2 = pa.array(geo2, type='binary')
+    arr_geo1 = _to_arrow_array_list(arr_geo1)
+    arr_geo2 = _to_arrow_array_list(arr_geo2)
+    arr_geo1 = pa.chunked_array(arr_geo1)
+    arr_geo2 = pa.chunked_array(arr_geo2)
+    result = arctern_core_.ST_Disjoint(arr_geo1, arr_geo2)
+    return result.to_pandas()
+
+def ST_Boundary(geo):
+    import pyarrow as pa
+    arr_geo = pa.array(geo, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    arr_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_Boundary(arr_geo)
+    return result.to_pandas()
 
 @arctern_udf('binary', 'binary')
 def ST_Touches(geo1, geo2):
@@ -1265,6 +1290,59 @@ def ST_CurveToLine(geos):
     result = [arctern_core_.ST_CurveToLine(g) for g in arr_geos]
     return _to_pandas_series(result)
 
+def ST_SymDifference(geo1, geo2):
+    import pyarrow as pa
+    arr_geo1 = pa.array(geo1, type='binary')
+    arr_geo2 = pa.array(geo2, type='binary')
+    arr_geo1 = _to_arrow_array_list(arr_geo1)
+    arr_geo2 = _to_arrow_array_list(arr_geo2)
+    chunked_array_geo1 = pa.chunked_array(arr_geo1)
+    chunked_array_geo2 = pa.chunked_array(arr_geo2)
+    result = arctern_core_.ST_SymDifference(chunked_array_geo1, chunked_array_geo2)
+    return result.to_pandas()
+
+def ST_Difference(geo1, geo2):
+    import pyarrow as pa
+    arr_geo1 = pa.array(geo1, type='binary')
+    arr_geo2 = pa.array(geo2, type='binary')
+    arr_geo1 = _to_arrow_array_list(arr_geo1)
+    arr_geo2 = _to_arrow_array_list(arr_geo2)
+    chunked_array_geo1 = pa.chunked_array(arr_geo1)
+    chunked_array_geo2 = pa.chunked_array(arr_geo2)
+    result = arctern_core_.ST_Difference(chunked_array_geo1, chunked_array_geo2)
+    return result.to_pandas()
+
+def ST_ExteriorRing(geos):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_ExteriorRing(chunked_array_geo)
+    return result.to_pandas()
+
+def ST_IsEmpty(geos):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_IsEmpty(chunked_array_geo)
+    return result.to_pandas()
+
+def ST_Scale(geos, factor_x, factor_y):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_Scale(chunked_array_geo, factor_x, factor_y)
+    return result.to_pandas()
+
+def ST_Affine(geos, a, b, d, e, offset_x, offset_y):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_Affine(chunked_array_geo, a, b, d, e, offset_x, offset_y)
+    return result.to_pandas()
 
 def within_which(left, right):
     """
@@ -1273,15 +1351,15 @@ def within_which(left, right):
     Parameters
     ----------
     left : GeoSeries
-        A GeoSeries that contains some geometries.
+        Sequence of geometries.
     right : GeoSeries
-        A GeoSeries that contains some geometries.
+        Sequence of geometries.
 
     Returns
     -------
     Series
         The indexes of geometries in ``right``.
-        For example, the *i*th value *j* in the returned Series indicates that the geometry ``left[i]`` is within the geometry ``right[j]``.
+        For example, the value *j* with index *i* in the returned Series indicates that the geometry ``left[i]`` is within the geometry ``right[j]``.
         * When there are multiple candidates, return one of them.
         * When there is no candidate, return NA.
 
