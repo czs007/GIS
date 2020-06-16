@@ -705,7 +705,7 @@ class GeoSeries(Series):
         1    False
         dtype: bool
         """
-        return _property_geo(arctern.ST_IsEmpty, self).astype(bool, copy=False)
+        return _property_op(arctern.ST_IsEmpty, self).astype(bool, copy=False)
 
     # -------------------------------------------------------------------------
     # Geometry related unary methods, which return GeoSeries
