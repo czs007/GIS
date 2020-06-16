@@ -186,6 +186,23 @@ std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
   return gdal::ST_ExteriorRing(geometries);
 }
 
+std::shared_ptr<arrow::ChunkedArray> ST_IsEmpty(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries) {
+  return gdal::ST_IsEmpty(geometries);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Scale(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double factor_x, double factor_y) {
+  return gdal::ST_Scale(geometries,factor_x,factor_y);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Affine(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double a, double b, double d, double e, double offset_x, double offset_y) {
+  return gdal::ST_Affine(geometries, a, b, d, e, offset_x, offset_y);
+}
+
 /*************************** MEASUREMENT FUNCTIONS ***************************/
 
 std::vector<std::shared_ptr<arrow::Array>> ST_DistanceSphere(

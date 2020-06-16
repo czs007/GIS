@@ -19,7 +19,6 @@ __all__ = [
     "ST_IsValid",
     "ST_PrecisionReduce",
     "ST_Equals",
-    "ST_Equals1",
     "ST_Disjoint",
     "ST_Boundary",
     "ST_Touches",
@@ -49,6 +48,9 @@ __all__ = [
     "ST_CurveToLine",
     "ST_SymDifference",
     "ST_Difference",
+    "ST_IsEmpty",
+    "ST_Scale",
+    "ST_Affine",
     "ST_GeomFromGeoJSON",
     "ST_GeomFromText",
     "ST_AsText",
@@ -1310,6 +1312,37 @@ def ST_Difference(geo1, geo2):
     result = arctern_core_.ST_Difference(chunked_array_geo1, chunked_array_geo2)
     return result.to_pandas()
 
+def ST_ExteriorRing(geos):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_ExteriorRing(chunked_array_geo)
+    return result.to_pandas()
+
+def ST_IsEmpty(geos):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_IsEmpty(chunked_array_geo)
+    return result.to_pandas()
+
+def ST_Scale(geos, factor_x, factor_y):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_Scale(chunked_array_geo, factor_x, factor_y)
+    return result.to_pandas()
+
+def ST_Affine(geos, a, b, d, e, offset_x, offset_y):
+    import pyarrow as pa
+    arr_geo = pa.array(geos, type='binary')
+    arr_geo = _to_arrow_array_list(arr_geo)
+    chunked_array_geo = pa.chunked_array(arr_geo)
+    result = arctern_core_.ST_Affine(chunked_array_geo, a, b, d, e, offset_x, offset_y)
+    return result.to_pandas()
 
 def within_which(left, right):
     """

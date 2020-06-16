@@ -975,7 +975,7 @@ std::shared_ptr<arrow::ChunkedArray> ST_SymDifference(
     }
   };
 
-  return BinaryOp<arrow::BinaryBuilder>(geo1,geo2,op);
+  return BinaryOp<arrow::BinaryBuilder>(geo1, geo2, op);
 }
 
 std::shared_ptr<arrow::ChunkedArray> ST_Difference(
@@ -998,29 +998,21 @@ std::shared_ptr<arrow::ChunkedArray> ST_Difference(
     }
   };
 
-  return BinaryOp<arrow::BinaryBuilder>(geo1,geo2,op);
+  return BinaryOp<arrow::BinaryBuilder>(geo1, geo2, op);
 }
 
 std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
-  const std::shared_ptr<arrow::ChunkedArray>& geometries) {
+    const std::shared_ptr<arrow::ChunkedArray>& geometries) {
   auto op = [](arrow::BinaryBuilder& builder, OGRGeometry* ogr) {
     assert(std::string(ogr->getGeometryName()) == "POLYGON");
     if (ogr->IsEmpty()) {
       builder.AppendNull();
     } else {
       auto polygon_geo = dynamic_cast<OGRPolygon*>(ogr);
-      std::cout << "ddddddd" << std::endl;
-      auto rst = polygon_geo->getExteriorRing();
-      std::cout << "ccccc" << std::endl;
-      char* str;
-      OGR_G_ExportToWkt(rst, &str);
-      std::cout << rst->getGeometryName() << ":" << str << std::endl;
+      OGRLineString* rst = polygon_geo->getExteriorRing();
       auto rst_wkb_size = rst->WkbSize();
       auto wkb = static_cast<unsigned char *>(CPLMalloc(rst_wkb_size));
       auto err_code = OGR_G_ExportToWkb(rst, OGRwkbByteOrder::wkbNDR, wkb);
-//      OGRGeometry* abc = nullptr;
-//      OGRGeometryFactory::createFromWkb(wkb, nullptr, &abc);
-//      std::cout << abc->getGeometryName() << std::endl;
       if (err_code != OGRERR_NONE) {
         builder.AppendNull();
       } else {
@@ -1030,7 +1022,73 @@ std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
     }
   };
 
-  return UnaryOp<arrow::BinaryBuilder>(geometries,op);
+  return UnaryOp<arrow::BinaryBuilder>(geometries, op);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_IsEmpty(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries) {
+  auto op = [](arrow::BooleanBuilder& builder, OGRGeometry* ogr) {
+    if (ogr->IsEmpty()) {
+      builder.Append(true);
+    } else {
+      builder.Append(false);
+    }
+  };
+
+  return UnaryOp<arrow::BooleanBuilder>(geometries, op);
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Affine(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double a, double b, double d, double e, double offset_x, double offset_y) {
+  AffineParams params(a, b, d, e, offset_x, offset_y);
+  auto affine_visitor = new AffineVisitor(params);
+  auto op = [&affine_visitor](arrow::BinaryBuilder& builder, OGRGeometry* ogr) {
+    ogr->accept(affine_visitor);
+    if (ogr->IsEmpty()) {
+      builder.AppendNull();
+    } else {
+      auto rst_wkb_size = ogr->WkbSize();
+      auto wkb = static_cast<unsigned char *>(CPLMalloc(rst_wkb_size));
+      auto err_code = OGR_G_ExportToWkb(ogr, OGRwkbByteOrder::wkbNDR, wkb);
+      if (err_code != OGRERR_NONE) {
+        builder.AppendNull();
+      } else {
+        builder.Append(wkb, rst_wkb_size);
+      }
+      CPLFree(wkb);
+    }
+  };
+
+  auto rst = UnaryOp<arrow::BinaryBuilder>(geometries, op);
+  delete affine_visitor;
+  return rst;
+}
+
+std::shared_ptr<arrow::ChunkedArray> ST_Scale(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double factor_x, double factor_y){
+  auto scale_visitor = new ScaleVisitor(factor_x,factor_y);
+  auto op = [&scale_visitor](arrow::BinaryBuilder& builder, OGRGeometry* ogr) {
+    ogr->accept(scale_visitor);
+    if (ogr->IsEmpty()) {
+      builder.AppendNull();
+    } else {
+      auto rst_wkb_size = ogr->WkbSize();
+      auto wkb = static_cast<unsigned char *>(CPLMalloc(rst_wkb_size));
+      auto err_code = OGR_G_ExportToWkb(ogr, OGRwkbByteOrder::wkbNDR, wkb);
+      if (err_code != OGRERR_NONE) {
+        builder.AppendNull();
+      } else {
+        builder.Append(wkb, rst_wkb_size);
+      }
+      CPLFree(wkb);
+    }  
+  };
+
+  auto rst = UnaryOp<arrow::BinaryBuilder>(geometries, op);
+  delete scale_visitor;
+  return rst;
 }
 
 /************************ MEASUREMENT FUNCTIONS ************************/

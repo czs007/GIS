@@ -112,6 +112,17 @@ std::shared_ptr<arrow::ChunkedArray> ST_Difference(
 std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
     const std::shared_ptr<arrow::ChunkedArray>& geometries);
 
+std::shared_ptr<arrow::ChunkedArray> ST_IsEmpty(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Scale(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries,
+    double factor_x, double factor_y);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Affine(
+  const std::shared_ptr<arrow::ChunkedArray>& geometries,
+  double a, double b, double d, double e, double offset_x, double offset_y);
+
 /*************************** MEASUREMENT FUNCTIONS ***************************/
 
 std::vector<std::shared_ptr<arrow::Array>> ST_DistanceSphere(

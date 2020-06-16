@@ -25,6 +25,7 @@
 #include "arrow/gis_api.h"
 #include "map_match/map_match.h"
 #include "utils/check_status.h"
+#include "gis/gdal/geometry_visitor.h"
 
 #define COMMON_TEST_CASES                                                              \
   auto p1 = "POINT (0 1)";                                                             \
@@ -3902,7 +3903,7 @@ TEST(geometry_test, test_st_symdifference) {
   OGR_G_ExportToWkb(geo1, OGRwkbByteOrder::wkbNDR, geo1_wkb);
   arrow::BinaryBuilder builder;
   std::shared_ptr<arrow::Array> geo1_array;
-  
+
   int32_t  rows = 10000;
   for (int32_t i = 0; i < rows; i++) {
     builder.Append(geo1_wkb, wkb_size);
@@ -3958,7 +3959,7 @@ TEST(geometry_test, test_st_difference) {
   arrow::BinaryBuilder builder;
   std::shared_ptr<arrow::Array> geo1_array;
   for (int32_t i = 0; i < 400001; i++) {
-    builder.Append(geo1_wkb,wkb_size);
+    builder.Append(geo1_wkb, wkb_size);
   }
   builder.Finish(&geo1_array);
 
@@ -3967,7 +3968,7 @@ TEST(geometry_test, test_st_difference) {
   OGR_G_ExportToWkb(geo2, OGRwkbByteOrder::wkbNDR, geo2_wkb);
   std::shared_ptr<arrow::Array> geo2_array;
   for (int32_t i = 0; i < 400001; i++) {
-    builder.Append(geo2_wkb,wkb_size);
+    builder.Append(geo2_wkb, wkb_size);
   }
   builder.Finish(&geo2_array);
 
@@ -3980,7 +3981,7 @@ TEST(geometry_test, test_st_difference) {
   auto geo1_chunked = std::make_shared<arrow::ChunkedArray>(geo1_arrays);
   auto geo2_chunked = std::make_shared<arrow::ChunkedArray>(geo2_arrays);
 
-  auto result = arctern::gis::ST_Difference(geo1_chunked,geo2_chunked);
+  auto result = arctern::gis::ST_Difference(geo1_chunked, geo2_chunked);
 
 
   for (int32_t i = 0; i < result->num_chunks(); i++) {
@@ -4000,8 +4001,67 @@ TEST(geometry_test, test_st_difference) {
   OGRGeometryFactory::destroyGeometry(geo2);
 }
 
-TEST(geometry_test, test_st_exteriorring) {
-  std::string str = "POLYGON ((0 0,1 0,1 1,0 1,0 0))";
+//TEST(geometry_test, test_st_exteriorring) {
+//  std::string str = "POLYGON ((0 0,1 0,1 1,0 1,0 0))";
+//  OGRGeometry* geo = nullptr;
+//  OGRGeometryFactory::createFromWkt(str.c_str(), nullptr, &geo);
+//  auto wkb_size = geo->WkbSize();
+//  auto geo_wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
+//  OGR_G_ExportToWkb(geo, OGRwkbByteOrder::wkbNDR, geo_wkb);
+//  arrow::BinaryBuilder builder;
+//  std::shared_ptr<arrow::Array> geo_array;
+//  for (int32_t i = 0; i < 4; i++) {
+//    builder.Append(geo_wkb,wkb_size);
+//  }
+//  builder.Finish(&geo_array);
+//  arrow::ArrayVector geo_arrays;
+//  geo_arrays.push_back(geo_array);
+//
+//  auto geo_chunked = std::make_shared<arrow::ChunkedArray>(geo_arrays);
+//  auto result = arctern::gis::ST_ExteriorRing(geo_chunked);
+//
+//
+//  for (int32_t i = 0; i < result->num_chunks(); i++) {
+//    auto binary_geos = std::static_pointer_cast<arrow::BinaryArray>(result->chunk(i));
+//    for (int32_t j = 0; j < result->chunk(i)->length(); j++) {
+//      auto data_ptr = binary_geos->GetString(j);
+//      OGRGeometry* result_geo = nullptr;
+//      OGRGeometryFactory::createFromWkb(data_ptr.c_str(), nullptrg space after
+//  }
+//
+//  OGRGeometryFactory::destroyGeometry(geo);
+//}
+
+TEST(geometry_test, test_st_isempty) {
+  std::vector<std::string> geos_str;
+  geos_str.push_back("POLYGON EMPTY");
+  geos_str.push_back("POINT EMPTY");
+  arrow::BinaryBuilder builder;
+  std::shared_ptr<arrow::Array> geo_array;
+  for (int32_t i = 0; i < 2; i++) {
+    OGRGeometry* geo;
+    OGRGeometryFactory::createFromWkt(geos_str[i].c_str(), nullptr, &geo);
+    auto wkb_size = geo->WkbSize();
+    auto wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
+    OGR_G_ExportToWkb(geo, OGRwkbByteOrder::wkbNDR, wkb);
+    builder.Append(wkb, wkb_size);
+  }
+  builder.Finish(&geo_array);
+  arrow::ArrayVector geo_arrays;
+  geo_arrays.push_back(geo_array);
+  auto geo_chunked = std::make_shared<arrow::ChunkedArray>(geo_arrays);
+
+  auto result = arctern::gis::ST_IsEmpty(geo_chunked);
+
+  for (int32_t i = 0; i < result->num_chunks(); i++) {
+    auto result_boolean = std::static_pointer_cast<arrow::BooleanArray>(result->chunk(i));
+    assert(true == result_boolean->Value(0));
+    assert(false == result_boolean->Value(1));
+  }
+}
+
+TEST(geometry_test, test_st_scale) {
+  std::string str = "POINT (120.6 100.999)";
   OGRGeometry* geo = nullptr;
   OGRGeometryFactory::createFromWkt(str.c_str(), nullptr, &geo);
   auto wkb_size = geo->WkbSize();
@@ -4009,30 +4069,55 @@ TEST(geometry_test, test_st_exteriorring) {
   OGR_G_ExportToWkb(geo, OGRwkbByteOrder::wkbNDR, geo_wkb);
   arrow::BinaryBuilder builder;
   std::shared_ptr<arrow::Array> geo_array;
-  for (int32_t i = 0; i < 4; i++) {
-    builder.Append(geo_wkb,wkb_size);
+  for (int32_t i = 0; i < 10000; i++) {
+    builder.Append(geo_wkb, wkb_size);
   }
   builder.Finish(&geo_array);
   arrow::ArrayVector geo_arrays;
   geo_arrays.push_back(geo_array);
 
   auto geo_chunked = std::make_shared<arrow::ChunkedArray>(geo_arrays);
-  auto result = arctern::gis::ST_ExteriorRing(geo_chunked);
-
-
-  for (int32_t i = 0; i < result->num_chunks(); i++) {
-    auto binary_geos = std::static_pointer_cast<arrow::BinaryArray>(result->chunk(i));
-    for (int32_t j = 0; j < result->chunk(i)->length(); j++) {
-      auto data_ptr = binary_geos->GetString(j);
-      OGRGeometry* result_geo = nullptr;
+  auto result = arctern::gis::ST_Scale(geo_chunked, 2, 2);
+  auto binary_boolean = std::static_pointer_cast<arrow::BinaryArray>(result->chunk(0));
+  for (int32_t i = 0; i < binary_boolean->length(); i++) {
+      auto data_ptr = binary_boolean->GetString(i);
+      OGRGeometry *result_geo = nullptr;
       OGRGeometryFactory::createFromWkb(data_ptr.c_str(), nullptr, &result_geo);
-      char* result_str;
+      char *result_str;
       OGR_G_ExportToWkt(result_geo, &result_str);
-      std::cout << str << std::endl;
-      // assert(std::string(str) == "LINESTRING (0 0,4 0)");
+      assert(std::string(result_str) == "POINT (241.2 201.998)");
       OGRGeometryFactory::destroyGeometry(result_geo);
-    }
   }
-  std::cout << "xxxxx" << std::endl;
   OGRGeometryFactory::destroyGeometry(geo);
+}
+
+TEST(geometry_test, test_st_affine) {
+    std::string str = "POINT (120.6 100.999)";
+    OGRGeometry* geo = nullptr;
+    OGRGeometryFactory::createFromWkt(str.c_str(), nullptr, &geo);
+    auto wkb_size = geo->WkbSize();
+    auto geo_wkb = static_cast<unsigned char*>(CPLMalloc(wkb_size));
+    OGR_G_ExportToWkb(geo, OGRwkbByteOrder::wkbNDR, geo_wkb);
+    arrow::BinaryBuilder builder;
+    std::shared_ptr<arrow::Array> geo_array;
+    for (int32_t i = 0; i < 10000; i++) {
+        builder.Append(geo_wkb, wkb_size);
+    }
+    builder.Finish(&geo_array);
+    arrow::ArrayVector geo_arrays;
+    geo_arrays.push_back(geo_array);
+
+    auto geo_chunked = std::make_shared<arrow::ChunkedArray>(geo_arrays);
+    auto result = arctern::gis::ST_Affine(geo_chunked, 2, 2, 2, 2, 2, 2);
+    auto binary_boolean = std::static_pointer_cast<arrow::BinaryArray>(result->chunk(0));
+    for (int32_t i = 0; i < binary_boolean->length(); i++) {
+        auto data_ptr = binary_boolean->GetString(i);
+        OGRGeometry *result_geo = nullptr;
+        OGRGeometryFactory::createFromWkb(data_ptr.c_str(), nullptr, &result_geo);
+        char *result_str;
+        OGR_G_ExportToWkt(result_geo, &result_str);
+        assert(std::string(result_str) == "POINT (445.198 445.198)");
+        OGRGeometryFactory::destroyGeometry(result_geo);
+    }
+    OGRGeometryFactory::destroyGeometry(geo);
 }
