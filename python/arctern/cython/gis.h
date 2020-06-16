@@ -51,6 +51,10 @@ std::shared_ptr<arrow::ChunkedArray> ST_Disjoint(
     const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
     const std::shared_ptr<arrow::ChunkedArray>& geometries_2);
 
+std::shared_ptr<arrow::ChunkedArray> ST_Union(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_2);
+
 std::shared_ptr<arrow::ChunkedArray> ST_Boundary(
     const std::shared_ptr<arrow::ChunkedArray>& geometries);
 
@@ -71,6 +75,9 @@ std::shared_ptr<arrow::Array> ST_IsSimple(
 
 std::shared_ptr<arrow::Array> ST_PrecisionReduce(
     const std::shared_ptr<arrow::Array>& geometries, int32_t num_dot);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Translate(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries, double shifter_x, double shifter_y);
 
 std::shared_ptr<arrow::Array> ST_GeometryType(
     const std::shared_ptr<arrow::Array>& geometries);

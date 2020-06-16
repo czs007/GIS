@@ -189,6 +189,10 @@ def ST_Disjoint(object left_geometries,object right_geometries ):
     result = arctern_core_pxd.ST_Disjoint(pyarrow_unwrap_chunked_array(left_geometries),pyarrow_unwrap_chunked_array(right_geometries))
     return pyarrow_wrap_chunked_array(result)
 
+def ST_Union(object left_geometries,object right_geometries ):
+    result = arctern_core_pxd.ST_Union(pyarrow_unwrap_chunked_array(left_geometries),pyarrow_unwrap_chunked_array(right_geometries))
+    return pyarrow_wrap_chunked_array(result)
+
 def ST_Boundary(object geometries ):
     result = arctern_core_pxd.ST_Boundary(pyarrow_unwrap_chunked_array(geometries))
     return pyarrow_wrap_chunked_array(result)
@@ -234,6 +238,9 @@ def ST_MakeValid(object geometries):
 
 def ST_PrecisionReduce(object geometries,int num_dat):
     return pyarrow_wrap_array(arctern_core_pxd.ST_PrecisionReduce(pyarrow_unwrap_array(geometries),num_dat))
+
+def ST_Translate(object geometries, double shifter_x, double shifter_y):
+    return pyarrow_wrap_chunked_array(arctern_core_pxd.ST_Translate(pyarrow_unwrap_chunked_array(geometries), shifter_x, shifter_y))
 
 def ST_SimplifyPreserveTopology(object geometries,double distanceTolerance):
     return pyarrow_wrap_array(arctern_core_pxd.ST_SimplifyPreserveTopology(pyarrow_unwrap_array(geometries),distanceTolerance))

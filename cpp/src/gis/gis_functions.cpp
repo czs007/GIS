@@ -148,6 +148,12 @@ std::shared_ptr<arrow::Array> ST_SimplifyPreserveTopology(
   return gdal::ST_SimplifyPreserveTopology(geometries, distance_tolerance);
 }
 
+std::shared_ptr<arrow::ChunkedArray> ST_Translate(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries, double shifter_x,
+    double shifter_y) {
+  return gdal::ST_Translate(geometries, shifter_x, shifter_y);
+}
+
 std::shared_ptr<arrow::Array> ST_Centroid(
     const std::shared_ptr<arrow::Array>& geometries) {
   return gdal::ST_Centroid(geometries);
@@ -203,6 +209,11 @@ std::shared_ptr<arrow::ChunkedArray> ST_Affine(
   return gdal::ST_Affine(geometries, a, b, d, e, offset_x, offset_y);
 }
 
+std::shared_ptr<arrow::ChunkedArray> ST_Union(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_2) {
+  return gdal::ST_Union(geometries_1, geometries_2);
+}
 /*************************** MEASUREMENT FUNCTIONS ***************************/
 
 std::vector<std::shared_ptr<arrow::Array>> ST_DistanceSphere(

@@ -50,6 +50,9 @@ cdef extern from "gis.h" namespace "arctern::gis":
     shared_ptr[CChunkedArray] ST_Disjoint(const shared_ptr[CChunkedArray] &left_geometries, \
                                          const shared_ptr[CChunkedArray] &right_geometries) except +
 
+    shared_ptr[CChunkedArray] ST_Union(const shared_ptr[CChunkedArray] &left_geometries, \
+                                         const shared_ptr[CChunkedArray] &right_geometries) except +
+
     shared_ptr[CChunkedArray] ST_Boundary(const shared_ptr[CChunkedArray] &geometries) except +
 
     vector[shared_ptr[CArray]] ST_Touches(const vector[shared_ptr[CArray]] &left_geometries, \
@@ -63,6 +66,7 @@ cdef extern from "gis.h" namespace "arctern::gis":
 
     shared_ptr[CArray] ST_IsSimple(const shared_ptr[CArray] &geometries) except +
     shared_ptr[CArray] ST_PrecisionReduce(const shared_ptr[CArray] &geometries, int32_t num_dot) except +
+    shared_ptr[CChunkedArray] ST_Translate(const shared_ptr[CChunkedArray] &geometries, double shifter_x, double shifter_y) except +
     shared_ptr[CArray] ST_GeometryType(const shared_ptr[CArray] &geometries) except +
     shared_ptr[CArray] ST_MakeValid(const shared_ptr[CArray] &geometries) except +
     shared_ptr[CArray] ST_SimplifyPreserveTopology(const shared_ptr[CArray] &geometries, double distanceTolerance) except +

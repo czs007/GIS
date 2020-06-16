@@ -88,6 +88,10 @@ std::shared_ptr<arrow::Array> ST_MakeValid(
 std::shared_ptr<arrow::Array> ST_SimplifyPreserveTopology(
     const std::shared_ptr<arrow::Array>& geometries, double distance_tolerance);
 
+std::shared_ptr<arrow::ChunkedArray> ST_Translate(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries, double shifter_x,
+    double shifter_y);
+
 std::shared_ptr<arrow::Array> ST_Centroid(
     const std::shared_ptr<arrow::Array>& geometries);
 
@@ -122,6 +126,9 @@ std::shared_ptr<arrow::ChunkedArray> ST_Scale(
 std::shared_ptr<arrow::ChunkedArray> ST_Affine(
   const std::shared_ptr<arrow::ChunkedArray>& geometries,
   double a, double b, double d, double e, double offset_x, double offset_y);
+std::shared_ptr<arrow::ChunkedArray> ST_Union(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_1,
+    const std::shared_ptr<arrow::ChunkedArray>& geometries_2);
 
 /*************************** MEASUREMENT FUNCTIONS ***************************/
 

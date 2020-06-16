@@ -140,6 +140,13 @@ void ScaleVisitor::visit(OGRPoint *geo) {
   geo->setY(coordinate_y * factor_y_);
 }
 
+void TranslateVisitor::visit(OGRPoint* geo) {
+  double coordinate_x = geo->getX();
+  double coordinate_y = geo->getY();
+  geo->setX(coordinate_x + shifter_x);
+  geo->setY(coordinate_y + shifter_y);
+}
+
 }  // namespace gdal
 }  // namespace gis
 }  // namespace arctern

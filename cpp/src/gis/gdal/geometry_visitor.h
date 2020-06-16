@@ -183,10 +183,23 @@ class AffineVisitor : public OGRDefaultGeometryVisitor {
   explicit AffineVisitor(const AffineParams& params) : param_(params){}
   ~AffineVisitor() = default;
 
-  void visit(OGRPoint*) override;
+   void visit(OGRPoint*) override;
 
  private:
   AffineParams param_;
+}; 
+
+class TranslateVisitor : public OGRDefaultGeometryVisitor {
+ public:
+  explicit TranslateVisitor(double shifter_x, double shifter_y)
+      : shifter_x(shifter_x), shifter_y(shifter_y) {}
+  ~TranslateVisitor() = default;
+
+  void visit(OGRPoint*) override;
+
+ private:
+  double shifter_x = 0.0;
+  double shifter_y = 0.0;
 };
 
 class ScaleVisitor : public OGRDefaultGeometryVisitor {

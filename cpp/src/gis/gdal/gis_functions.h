@@ -77,6 +77,10 @@ std::vector<std::shared_ptr<arrow::Array>> ST_Buffer(
 std::shared_ptr<arrow::Array> ST_PrecisionReduce(
     const std::shared_ptr<arrow::Array>& geometries, int32_t precision);
 
+std::shared_ptr<arrow::ChunkedArray> ST_Translate(
+    const std::shared_ptr<arrow::ChunkedArray>& geometries, double shifter_x,
+    double shifter_y);
+
 std::vector<std::shared_ptr<arrow::Array>> ST_Intersection(
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_1,
     const std::vector<std::shared_ptr<arrow::Array>>& geometries_2);
@@ -121,6 +125,10 @@ std::shared_ptr<arrow::ChunkedArray> ST_Affine(
 std::shared_ptr<arrow::ChunkedArray> ST_Scale(
     const std::shared_ptr<arrow::ChunkedArray>& geometries,
     double factor_x, double factor_y);
+
+std::shared_ptr<arrow::ChunkedArray> ST_Union(
+    const std::shared_ptr<arrow::ChunkedArray>& geo1,
+    const std::shared_ptr<arrow::ChunkedArray>& geo2);
 
 /*************************** MEASUREMENT FUNCTIONS ***************************/
 

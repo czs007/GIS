@@ -53,6 +53,14 @@ def test_ST_PrecisionReduce():
     assert rst[0] == "POINT (1.33 2.67)"
     assert rst[1] == "POINT (2.66 4.45)"
 
+def test_ST_Translate():
+    data = pandas.Series(["POINT (1 6)", "LINESTRING (0 0,0 1,1 1)", "POLYGON ((0 0,0 1,1 1,0 0))"])
+    rst = arctern.ST_AsText(arctern.ST_Translate(arctern.ST_GeomFromText(data), 1.2, 0.3))
+
+    assert len(rst) == 3
+    assert rst[0] == "POINT (2.2 6.3)"
+    assert rst[1] == "LINESTRING (1.2 0.3,1.2 1.3,2.2 1.3)"
+    assert rst[2] == "POLYGON ((1.2 0.3,1.2 1.3,2.2 1.3,1.2 0.3))"
 
 def test_ST_Intersection():
     data1 = pandas.Series(["POLYGON ((1 1,1 2,2 2,2 1,1 1))", "POINT (0 1)"])
@@ -79,6 +87,16 @@ def test_ST_Intersection():
         arctern.ST_Intersection(arctern.ST_GeomFromText("POINT (0 1)")[0], arctern.ST_GeomFromText("POINT (0 1)")[0]))
     assert len(rst) == 1
     assert rst[0] == "POINT (0 1)"
+
+
+def test_ST_Union():
+    data1 = pandas.Series(["POLYGON ((0 0,2 0,2 2,0 2,0 0))", "POINT (0 1)"])
+    data2 = pandas.Series(["POLYGON ((1 0,3 0,3 2,0 2,1 0))", "POINT (2 1)"])
+    rst = arctern.ST_AsText(arctern.ST_MakeValid(arctern.ST_SimplifyPreserveTopology(arctern.ST_Union(
+        arctern.ST_GeomFromText(data1), arctern.ST_GeomFromText(data2)), 0.01)))
+    assert len(rst) == 2
+    assert rst[0] == "POLYGON ((1 0,0 0,0 2,3 2,3 0,1 0))"
+    assert rst[1] == "MULTIPOINT (0 1,2 1)"
 
 
 def test_ST_Equals():
@@ -255,7 +273,7 @@ def test_ST_AsGeoJSON():
     assert str_ptr[0] == '{ "type": "Point", "coordinates": [ 1.0, 2.0 ] }'
     assert str_ptr[1] == '{ "type": "LineString", "coordinates": [ [ 1.0, 2.0 ], [ 4.0, 5.0 ], [ 7.0, 8.0 ] ] }'
     assert str_ptr[
-        2] == '{ "type": "Polygon", "coordinates": [ [ [ 0.0, 0.0 ], [ 0.0, 1.0 ], [ 1.0, 1.0 ], [ 1.0, 0.0 ], [ 0.0, 0.0 ] ] ] }'
+               2] == '{ "type": "Polygon", "coordinates": [ [ [ 0.0, 0.0 ], [ 0.0, 1.0 ], [ 1.0, 1.0 ], [ 1.0, 0.0 ], [ 0.0, 0.0 ] ] ] }'
 
 
 def test_ST_GeomFromText():
@@ -493,8 +511,9 @@ def test_ST_Centroid():
     assert rst[0] == "POINT (0.5 0.5)"
     assert rst[1] == "POINT (4 4)"
 
+
 def test_ST_Boundary():
-    data = ["POINT (1 2)","LINESTRING (0 0,1 0,1 2,3 4)", "POLYGON((0 0,0 8,8 8,8 0,0 0))", "POLYGON EMPTY"]
+    data = ["POINT (1 2)", "LINESTRING (0 0,1 0,1 2,3 4)", "POLYGON((0 0,0 8,8 8,8 0,0 0))", "POLYGON EMPTY"]
     data = pandas.Series(data)
     rst = arctern.ST_AsText(arctern.ST_Boundary(arctern.ST_GeomFromText(data)))
 
@@ -503,6 +522,7 @@ def test_ST_Boundary():
     assert rst[1] == "MULTIPOINT (0 0,3 4)"
     assert rst[2] == "LINESTRING (0 0,0 8,8 8,8 0,0 0)"
     assert rst[3] == "POLYGON EMPTY"
+
 
 def test_ST_Length():
     data = ["LINESTRING(0 0,0 1)", "LINESTRING(1 1,1 4)"]
@@ -532,7 +552,7 @@ def test_ST_HausdorffDistance():
     assert rst[1] == 0
 
     rst = arctern.ST_HausdorffDistance(arctern.ST_GeomFromText("POINT(0 0)")[
-                                       0], arctern.ST_GeomFromText(data2))
+                                           0], arctern.ST_GeomFromText(data2))
     assert len(rst) == 2
     assert math.isclose(rst[0], 2, rel_tol=1e-5)
     assert rst[1] == 1.0
@@ -569,6 +589,7 @@ def test_ST_CurveToLine():
     rst = arctern.ST_AsText(arctern.ST_CurveToLine(arctern.ST_GeomFromText(data)))
 
     assert str(rst[0]).startswith("POLYGON")
+
 
 def test_ST_SymDifference():
     p1 = "LINESTRING (0 0,5 0)"
@@ -667,6 +688,7 @@ def test_ST_PolygonFromEnvelope():
 
     assert rst[0] == "POLYGON ((0 0,0 1,1 1,1 0,0 0))"
 
+
 def test_ST_Disjoint():
     p11 = "POLYGON((0 0,1 0,1 1,0 1,0 0))"
     p12 = "POLYGON((8 0,9 0,9 1,8 1,8 0))"
@@ -737,6 +759,7 @@ def test_ST_Envelope_Aggr():
     data = pandas.Series([p1, p2])
     rst = arctern.ST_AsText(arctern.ST_Envelope_Aggr(arctern.ST_GeomFromText(data)))
     assert rst[0] == "POLYGON ((0 0,0 4,7 4,7 0,0 0))"
+
 
 # Test whether arctern _wrapper_func can process list-like data,
 # include `list`, `set`, `numpy.ndarray`, `pandas.Series`

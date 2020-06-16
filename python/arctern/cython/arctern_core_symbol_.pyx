@@ -79,6 +79,9 @@ def ST_Equals(object left_geometries,object right_geometries):
 def ST_Disjoint(object left_geometries,object right_geometries):
     pass
 
+def ST_Union(object left_geometries,object right_geometries):
+    pass
+
 def ST_Boundary(object geometries):
     pass
 
@@ -101,6 +104,9 @@ def ST_MakeValid(object geometries):
     pass
 
 def ST_PrecisionReduce(object geometries,int num_dat):
+    pass
+
+def ST_Translate(object geometries, double shifter_x, double shifter_y):
     pass
 
 def ST_SimplifyPreserveTopology(object geometries,double distanceTolerance):
