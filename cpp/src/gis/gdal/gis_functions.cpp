@@ -1039,7 +1039,7 @@ std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
         builder.Append(wkb, rst_wkb_size);
       }
       CPLFree(wkb);
-      delete []points;
+      delete[] points;
     }
   };
 
