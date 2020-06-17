@@ -1029,7 +1029,7 @@ std::shared_ptr<arrow::ChunkedArray> ST_ExteriorRing(
       auto points = new OGRRawPoint[num_points];
       auto rst = std::make_shared<OGRLineString>();
       exterior_ring->getPoints(points);
-      rst->setPoints(num_points,points);
+      rst->setPoints(num_points, points);
       auto rst_wkb_size = rst->WkbSize();
       auto wkb = static_cast<unsigned char*>(CPLMalloc(rst_wkb_size));
       auto err_code = OGR_G_ExportToWkb(rst.get(), OGRwkbByteOrder::wkbNDR, wkb);

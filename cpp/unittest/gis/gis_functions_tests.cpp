@@ -25,7 +25,6 @@
 #include "gis/gdal/geometry_visitor.h"
 #include "map_match/map_match.h"
 #include "utils/check_status.h"
-#include "gis/gdal/geometry_visitor.h"
 
 #define COMMON_TEST_CASES                                                              \
   auto p1 = "POINT (0 1)";                                                             \
@@ -4196,7 +4195,7 @@ TEST(geometry_test, test_st_difference) {
   OGRGeometryFactory::destroyGeometry(geo2);
 }
 
- TEST(geometry_test, test_st_exteriorring) {
+TEST(geometry_test, test_st_exteriorring) {
   std::string str = "POLYGON ((0 0,1 0,1 1,0 1,0 0))";
   OGRGeometry* geo = nullptr;
   OGRGeometryFactory::createFromWkt(str.c_str(), nullptr, &geo);
@@ -4206,7 +4205,7 @@ TEST(geometry_test, test_st_difference) {
   arrow::BinaryBuilder builder;
   std::shared_ptr<arrow::Array> geo_array;
   for (int32_t i = 0; i < 4; i++) {
-    builder.Append(geo_wkb,wkb_size);
+    builder.Append(geo_wkb, wkb_size);
   }
   builder.Finish(&geo_array);
   arrow::ArrayVector geo_arrays;
